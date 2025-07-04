@@ -4,11 +4,13 @@
 - `contracts/scripts/deploy.ts` – Hardhat deployment script for Sapphire.
 - `contracts/hardhat.config.ts` – Hardhat configuration (Solidity version, Sapphire network, plugins).
 - `frontend/components/WalletConnectButton.tsx` – Re-usable RainbowKit wallet-connect component with glassmorphism styling.
-- `frontend/components/VaultCreator.tsx` – UI for creating a vault, uploading files, and encrypting them client-side.
+- `frontend/components/VaultCreator.tsx` – UI for creating a vault, uploading files, and encrypting them client-side with glassmorphism design.
+- `frontend/lib/crypto/encryption.ts` – AES-256 encryption/decryption utilities with file support.
+- `frontend/hooks/useWalrusStorage.ts` – Walrus storage integration hook with mock implementation for development.
+- `frontend/app/vault/page.tsx` – Demo page showcasing the VaultCreator component.
 - `frontend/components/VaultDashboard.tsx` – Owner dashboard listing vaults, pings, and heir status.
 - `frontend/components/HeirDecrypt.tsx` – Heir view to retrieve AES key and decrypt files.
-- `frontend/hooks/useWalrusStorage.ts` – Wrapper around Walrus JS SDK for upload and retrieval.
-- `frontend/lib/crypto/encryption.ts` – AES-256 encryption/decryption helpers using `crypto-js`.
+- `frontend/hooks/useWalrusStorage.ts` – Wrapper around Walrus storage service for upload and retrieval with mock implementation.
 - `contracts/tests/ConfidentialInheritanceVault.test.ts` – Unit tests for the smart contract logic.
 - `backend/tests/VaultWorkflow.test.ts` – End-to-end test simulating owner inactivity and heir decryption.
 - `README.md` – Project overview, setup instructions, and developer guide.
@@ -53,7 +55,7 @@
   - [x] 1.2 Install and configure `wagmi`, `@rainbow-me/rainbowkit`, and `viem`.
   - [x] 1.3 Implement `WalletConnectButton.tsx` with RainbowKit (https://rainbowkit.com/docs/introduction) themes to match glassmorphism UI. 
   - [ ] 1.4 Create global Tailwind config with dark gradient background and neon indigo-purple accent colors.
-  - [ ] 1.5 Build `VaultCreator.tsx` for uploading files, client-side AES-256 encryption, and Walrus upload (https://docs.wal.app/).
+  - [x] 1.5 Build `VaultCreator.tsx` for uploading files, client-side AES-256 encryption, and Walrus upload (https://docs.wal.app/).
   - [ ] 1.6 Build `VaultDashboard.tsx` listing vaults, last ping dates, heirs, and controls to add/remove files.
   - [ ] 1.7 Build `HeirDecrypt.tsx` to fetch AES key, retrieve encrypted files, and decrypt in-browser.
   - [ ] 1.8 Add Framer-Motion animations for component slide-in and hover effects.

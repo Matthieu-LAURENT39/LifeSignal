@@ -1,4 +1,8 @@
+'use client';
+
 import { WalletConnectButton } from '../components/WalletConnectButton';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
 
 export default function Home() {
   return (
@@ -36,6 +40,28 @@ export default function Home() {
           
           <div className="text-sm text-white/50 mt-8">
             Connect your wallet to get started with creating your inheritance vault
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-4 mt-8 justify-center">
+            <Link href="/vault">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-8 py-4 bg-gradient-to-r from-emerald-600/80 to-teal-600/80 hover:from-emerald-500/90 hover:to-teal-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-emerald-500/25"
+              >
+                🔒 Create Your Vault
+              </motion.button>
+            </Link>
+            
+            <Link href="/test-encryption">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-8 py-4 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500/90 hover:to-pink-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-purple-500/25"
+              >
+                🧪 Test Encryption
+              </motion.button>
+            </Link>
           </div>
           
           {/* Features grid */}
