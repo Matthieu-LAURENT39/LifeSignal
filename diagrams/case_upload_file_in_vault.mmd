@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant User
+    participant OASIS
+    participant WALRUS
+
+    User->>OASIS: get KEY
+
+    activate OASIS
+    OASIS->>OASIS: verify Owner
+    deactivate OASIS
+
+    OASIS->>User: send KEY
+
+    activate User
+    User->>User: crypt file 
+
+    User->>WALRUS: publish on
+    
+    Note over WALRUS: Walrus Blob ID is the identifier of a Sui object thaht represents stored blob on chain (Hex or Base36 format)
+    activate WALRUS
+    WALRUS->>WALRUS: generate a Blob ID (Sui Object ID)
+    deactivate WALRUS
+
+    WALRUS-->>User: rerceive the Blob ID
+    User->>OASIS: call the function and upload file 
+
+ 
