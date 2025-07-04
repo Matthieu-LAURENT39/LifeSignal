@@ -13,6 +13,10 @@
 - `backend/tests/VaultWorkflow.test.ts` – End-to-end test simulating owner inactivity and heir decryption.
 - `README.md` – Project overview, setup instructions, and developer guide.
 - `package.json` – Root package.json with workspaces configuration and common dev dependencies.
+- `.eslintrc.json` – Root ESLint configuration with TypeScript and React support.
+- `.prettierrc` – Prettier code formatting configuration.
+- `.editorconfig` – EditorConfig settings for consistent code style across editors.
+- `.env.example` – Environment variables template with all necessary configuration options.
 - `frontend/package.json` – Next.js 15 project configuration with TypeScript and TailwindCSS.
 - `frontend/app/` – Next.js app directory with layout.tsx and page.tsx.
 - `backend/package.json` – Express backend configuration with TypeScript support.
@@ -39,7 +43,7 @@
   - [x] 0.3 Scaffold `/frontend` with **Next.js 15 (https://nextjs.org/docs) + TypeScript** (`npx create-next-app@latest`) and set the app directory layout.
   - [x] 0.4 Scaffold `/backend` with **Express + TypeScript** (`npm init`, `ts-node`, `nodemon`) for any off-chain helpers or API routes.
   - [x] 0.5 Scaffold `/contracts` with **Hardhat v2** (`npx hardhat init --typescript`).
-  - [ ] 0.6 Add shared configuration files (`.eslintrc`, `.prettierrc`, `.editorconfig`) and root `.env.example`.
+  - [x] 0.6 Add shared configuration files (`.eslintrc`, `.prettierrc`, `.editorconfig`) and root `.env.example`.
   - [ ] 0.7 Commit the initial scaffold to Git.
 
 - [ ] 1.0 Front-End & Wallet Integration
