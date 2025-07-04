@@ -1,0 +1,83 @@
+## Relevant Files
+
+- `contracts/ConfidentialInheritanceVault.sol` – Confidential smart contract storing AES key, heirs, proof-of-life intervals, and release logic.
+- `contracts/scripts/deploy.ts` – Hardhat deployment script for Sapphire.
+- `contracts/hardhat.config.ts` – Hardhat configuration (Solidity version, Sapphire network, plugins).
+- `frontend/components/WalletConnectButton.tsx` – Re-usable RainbowKit wallet-connect component.
+- `frontend/components/VaultCreator.tsx` – UI for creating a vault, uploading files, and encrypting them client-side.
+- `frontend/components/VaultDashboard.tsx` – Owner dashboard listing vaults, pings, and heir status.
+- `frontend/components/HeirDecrypt.tsx` – Heir view to retrieve AES key and decrypt files.
+- `frontend/hooks/useWalrusStorage.ts` – Wrapper around Walrus JS SDK for upload and retrieval.
+- `frontend/lib/crypto/encryption.ts` – AES-256 encryption/decryption helpers using `crypto-js`.
+- `contracts/tests/ConfidentialInheritanceVault.test.ts` – Unit tests for the smart contract logic.
+- `backend/tests/VaultWorkflow.test.ts` – End-to-end test simulating owner inactivity and heir decryption.
+- `README.md` – Project overview, setup instructions, and developer guide.
+
+### Notes
+
+- Place component tests alongside their component files (e.g., `VaultCreator.test.tsx`).
+- Run all tests with `npx jest` or a specific test file with `npx jest path/to/test`.
+
+## Tasks
+
+- [ ] 0.0 Project Scaffold & Initialization
+  - [ ] 0.1 Create directory structure `/frontend`, `/backend`, `/contracts` inside the repository root.
+  - [ ] 0.2 Initialise root `package.json` with workspaces pointing to the three sub-projects; add common dev-deps (`eslint`, `prettier`, `husky`, `lint-staged`).
+  - [ ] 0.3 Scaffold `/frontend` with **Next.js 14 + TypeScript** (`npx create-next-app@latest`) and set the app directory layout.
+  - [ ] 0.4 Scaffold `/backend` with **Express + TypeScript** (`npm init`, `ts-node`, `nodemon`) for any off-chain helpers or API routes.
+  - [ ] 0.5 Scaffold `/contracts` with **Hardhat v3** (`npx hardhat init --typescript`).
+  - [ ] 0.6 Add shared configuration files (`.eslintrc`, `.prettierrc`, `.editorconfig`) and root `.env.example`.
+  - [ ] 0.7 Commit the initial scaffold to Git.
+
+- [ ] 1.0 Front-End & Wallet Integration
+  - [ ] 1.1 Scaffold Next.js 14 project with React 19, TypeScript, TailwindCSS, and Framer-Motion.
+  - [ ] 1.2 Install and configure `wagmi`, `@rainbow-me/rainbowkit`, and `viem`.
+  - [ ] 1.3 Implement `WalletConnectButton.tsx` with RainbowKit themes to match glassmorphism UI.
+  - [ ] 1.4 Create global Tailwind config with dark gradient background and neon indigo-purple accent colors.
+  - [ ] 1.5 Build `VaultCreator.tsx` for uploading files, client-side AES-256 encryption, and Walrus upload.
+  - [ ] 1.6 Build `VaultDashboard.tsx` listing vaults, last ping dates, heirs, and controls to add/remove files.
+  - [ ] 1.7 Build `HeirDecrypt.tsx` to fetch AES key, retrieve encrypted files, and decrypt in-browser.
+  - [ ] 1.8 Add Framer-Motion animations for component slide-in and hover effects.
+  - [ ] 1.9 Integrate TailwindCSS, Framer-Motion, and glassmorphism theme into the previously scaffolded Next.js front-end.
+
+- [ ] 2.0 Smart-Contract Development (Sapphire) & Walrus Storage
+  - [ ] 2.1 Initialise Hardhat v3 project (`npx hardhat init`) and add TypeScript support.
+  - [ ] 2.2 Ensure Hardhat project in `/contracts` has required plugins (`@nomicfoundation/hardhat-toolbox`, `@typechain/hardhat`) and TypeScript support.
+  - [ ] 2.3 Write `ConfidentialInheritanceVault.sol` implementing:
+        • Owner-set AES key (private)
+        • Configurable ping interval & grace window
+        • Heir & contact management
+        • `ping()` function (Owner)
+        • `voteOwnerDead()` (Contacts)
+        • `releaseKey()` auto/unlock after conditions
+        • Events (`PingReceived`, `KeyReleased`)
+  - [ ] 2.4 Configure Sapphire network in `hardhat.config.ts` with RPC URL & confidential settings.
+  - [ ] 2.5 Write deployment & upgrade scripts in `scripts/deploy.ts` and verify on explorer.
+  - [ ] 2.6 Generate ABI & TypeScript types via `typechain` for use with `viem` hooks.
+  - [ ] 2.7 Create `useWalrusStorage.ts` wrapper: upload encrypted blobs, retrieve via CID, handle large files.
+  - [ ] 2.8 Integrate Walrus SDK keys/env vars via `.env.local`.
+
+- [ ] 3.0 Proof-of-Life & Key-Release Workflow
+  - [ ] 3.1 Implement periodic ping reminder (browser notification / email) using `service-workers` or cron-like approach.
+  - [ ] 3.2 Add UI in `VaultDashboard` to trigger `ping()` transaction and record timestamp.
+  - [ ] 3.3 Implement Contact voting UI to call `voteOwnerDead()` with weight/quorum logic.
+  - [ ] 3.4 Build listener hook to watch `KeyReleased` events via `viem` WebSocket provider.
+  - [ ] 3.5 On `KeyReleased`, auto-fetch AES key, retrieve encrypted files from Walrus, and decrypt.
+  - [ ] 3.6 Provide graceful error handling & edge-case messaging (owner revoked heir, lost key, etc.).
+
+- [ ] 4.0 Testing, QA & Security Review
+  - [ ] 4.1 Write smart-contract unit tests in `ConfidentialInheritanceVault.test.ts` (ping logic, key release, access control).
+  - [ ] 4.2 Add hardhat coverage & gas reporter plugins.
+  - [ ] 4.3 Write front-end unit tests using React Testing Library for `VaultCreator`, `VaultDashboard`, and `HeirDecrypt`.
+  - [ ] 4.4 Create integration test (`VaultWorkflow.test.ts`) simulating full flow on a local Sapphire node.
+  - [ ] 4.5 Run `eslint`, `prettier`, and TypeScript type checks; fix all warnings.
+  - [ ] 4.6 **[Human]** Conduct manual UI/UX walkthrough and capture accessibility audit report.
+  - [ ] 4.7 **[Human]** Perform security review of contract (check re-entrancy, overflow, access control) and address findings.
+
+- [ ] 5.0 Deployment, Documentation & Demo Preparation
+  - [ ] 5.1 Deploy contract to Sapphire testnet; verify source on explorer.
+  - [ ] 5.2 Deploy Next.js app to Vercel (or similar) with environment variables for network & Walrus.
+  - [ ] 5.3 Write comprehensive `README.md` with setup, dev commands, and architectural overview.
+  - [ ] 5.4 Draft demo script covering vault creation → ping cycle → key release → heir decryption.
+  - [ ] 5.5 **[Human]** Record ≤ 5-minute demo video following the script.
+  - [ ] 5.6 Gather final links (repo, explorer, Walrus CID) for submission. 
