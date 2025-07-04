@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant User
+    participant OASIS
+
+    User->>User: create KEY
+    activate User
+    User-->>User: KEY created
+    deactivate User
+
+    User->>User: create vault : a Smart Contract
+    activate User
+    User-->>User: vault created
+    deactivate User
+
+    User->>OASIS: publish on OASIS
