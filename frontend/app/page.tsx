@@ -53,6 +53,16 @@ export default function Home() {
               </motion.button>
             </Link>
             
+            <Link href="/dashboard">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-8 py-4 bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-500/90 hover:to-purple-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-indigo-500/25"
+              >
+                📊 Vault Dashboard
+              </motion.button>
+            </Link>
+            
             <Link href="/test-encryption">
               <motion.button
                 whileHover={{ scale: 1.05 }}

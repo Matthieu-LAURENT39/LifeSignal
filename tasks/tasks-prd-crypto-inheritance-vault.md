@@ -8,6 +8,8 @@
 - `frontend/lib/crypto/encryption.ts` – AES-256 encryption/decryption utilities with file support.
 - `frontend/hooks/useWalrusStorage.ts` – Walrus storage integration hook with mock implementation for development.
 - `frontend/app/vault/page.tsx` – Demo page showcasing the VaultCreator component.
+- `frontend/app/dashboard/page.tsx` – Demo page showcasing the VaultDashboard component.
+- `frontend/app/test-encryption/page.tsx` – Test lab for encryption/decryption workflow.
 - `frontend/components/VaultDashboard.tsx` – Owner dashboard listing vaults, pings, and heir status.
 - `frontend/components/HeirDecrypt.tsx` – Heir view to retrieve AES key and decrypt files.
 - `frontend/hooks/useWalrusStorage.ts` – Wrapper around Walrus storage service for upload and retrieval with mock implementation.
@@ -56,7 +58,7 @@
   - [x] 1.3 Implement `WalletConnectButton.tsx` with RainbowKit (https://rainbowkit.com/docs/introduction) themes to match glassmorphism UI. 
   - [ ] 1.4 Create global Tailwind config with dark gradient background and neon indigo-purple accent colors.
   - [x] 1.5 Build `VaultCreator.tsx` for uploading files, client-side AES-256 encryption, and Walrus upload (https://docs.wal.app/).
-  - [ ] 1.6 Build `VaultDashboard.tsx` listing vaults, last ping dates, heirs, and controls to add/remove files.
+  - [x] 1.6 Build `VaultDashboard.tsx` listing vaults, contacts assigned to the vault, and controls to add/remove files.
   - [ ] 1.7 Build `HeirDecrypt.tsx` to fetch AES key, retrieve encrypted files, and decrypt in-browser.
   - [ ] 1.8 Add Framer-Motion animations for component slide-in and hover effects.
   - [ ] 1.9 Integrate TailwindCSS, Framer-Motion, and glassmorphism theme into the previously scaffolded Next.js front-end.
