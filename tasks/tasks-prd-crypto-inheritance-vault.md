@@ -12,6 +12,13 @@
 - `contracts/tests/ConfidentialInheritanceVault.test.ts` – Unit tests for the smart contract logic.
 - `backend/tests/VaultWorkflow.test.ts` – End-to-end test simulating owner inactivity and heir decryption.
 - `README.md` – Project overview, setup instructions, and developer guide.
+- `package.json` – Root package.json with workspaces configuration and common dev dependencies.
+- `frontend/package.json` – Next.js 15 project configuration with TypeScript and TailwindCSS.
+- `frontend/app/` – Next.js app directory with layout.tsx and page.tsx.
+- `backend/package.json` – Express backend configuration with TypeScript support.
+- `backend/src/index.ts` – Main Express server with middleware, basic routes, and error handling.
+- `backend/tsconfig.json` – TypeScript configuration for the backend.
+- `backend/.env.example` – Environment variables template.
 
 ### Notes
 
@@ -24,7 +31,7 @@
   - [x] 0.1 Create directory structure `/frontend`, `/backend`, `/contracts` inside the repository root.
   - [x] 0.2 Initialise root `package.json` with workspaces pointing to the three sub-projects; add common dev-deps (`eslint`, `prettier`, `husky`, `lint-staged`).
   - [x] 0.3 Scaffold `/frontend` with **Next.js 15 (https://nextjs.org/docs) + TypeScript** (`npx create-next-app@latest`) and set the app directory layout.
-  - [ ] 0.4 Scaffold `/backend` with **Express + TypeScript** (`npm init`, `ts-node`, `nodemon`) for any off-chain helpers or API routes.
+  - [x] 0.4 Scaffold `/backend` with **Express + TypeScript** (`npm init`, `ts-node`, `nodemon`) for any off-chain helpers or API routes.
   - [ ] 0.5 Scaffold `/contracts` with **Hardhat v3** (`npx hardhat init --typescript`).
   - [ ] 0.6 Add shared configuration files (`.eslintrc`, `.prettierrc`, `.editorconfig`) and root `.env.example`.
   - [ ] 0.7 Commit the initial scaffold to Git.
