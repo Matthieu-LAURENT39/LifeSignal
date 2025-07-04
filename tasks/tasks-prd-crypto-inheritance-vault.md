@@ -23,25 +23,25 @@
 - [ ] 0.0 Project Scaffold & Initialization
   - [ ] 0.1 Create directory structure `/frontend`, `/backend`, `/contracts` inside the repository root.
   - [ ] 0.2 Initialise root `package.json` with workspaces pointing to the three sub-projects; add common dev-deps (`eslint`, `prettier`, `husky`, `lint-staged`).
-  - [ ] 0.3 Scaffold `/frontend` with **Next.js 14 + TypeScript** (`npx create-next-app@latest`) and set the app directory layout.
+  - [ ] 0.3 Scaffold `/frontend` with **Next.js 15 (https://nextjs.org/docs) + TypeScript** (`npx create-next-app@latest`) and set the app directory layout.
   - [ ] 0.4 Scaffold `/backend` with **Express + TypeScript** (`npm init`, `ts-node`, `nodemon`) for any off-chain helpers or API routes.
   - [ ] 0.5 Scaffold `/contracts` with **Hardhat v3** (`npx hardhat init --typescript`).
   - [ ] 0.6 Add shared configuration files (`.eslintrc`, `.prettierrc`, `.editorconfig`) and root `.env.example`.
   - [ ] 0.7 Commit the initial scaffold to Git.
 
 - [ ] 1.0 Front-End & Wallet Integration
-  - [ ] 1.1 Scaffold Next.js 14 project with React 19, TypeScript, TailwindCSS, and Framer-Motion.
+  - [ ] 1.1 Scaffold Next.js 15 project with React, TypeScript, TailwindCSS, and Framer-Motion. (https://nextjs.org/docs)
   - [ ] 1.2 Install and configure `wagmi`, `@rainbow-me/rainbowkit`, and `viem`.
-  - [ ] 1.3 Implement `WalletConnectButton.tsx` with RainbowKit themes to match glassmorphism UI.
+  - [ ] 1.3 Implement `WalletConnectButton.tsx` with RainbowKit (https://rainbowkit.com/docs/introduction) themes to match glassmorphism UI. 
   - [ ] 1.4 Create global Tailwind config with dark gradient background and neon indigo-purple accent colors.
-  - [ ] 1.5 Build `VaultCreator.tsx` for uploading files, client-side AES-256 encryption, and Walrus upload.
+  - [ ] 1.5 Build `VaultCreator.tsx` for uploading files, client-side AES-256 encryption, and Walrus upload (https://docs.wal.app/).
   - [ ] 1.6 Build `VaultDashboard.tsx` listing vaults, last ping dates, heirs, and controls to add/remove files.
   - [ ] 1.7 Build `HeirDecrypt.tsx` to fetch AES key, retrieve encrypted files, and decrypt in-browser.
   - [ ] 1.8 Add Framer-Motion animations for component slide-in and hover effects.
   - [ ] 1.9 Integrate TailwindCSS, Framer-Motion, and glassmorphism theme into the previously scaffolded Next.js front-end.
 
 - [ ] 2.0 Smart-Contract Development (Sapphire) & Walrus Storage
-  - [ ] 2.1 Initialise Hardhat v3 project (`npx hardhat init`) and add TypeScript support.
+  - [ ] 2.1 Initialise Hardhat v3 (https://hardhat.org/hardhat3-alpha) project and add TypeScript support.
   - [ ] 2.2 Ensure Hardhat project in `/contracts` has required plugins (`@nomicfoundation/hardhat-toolbox`, `@typechain/hardhat`) and TypeScript support.
   - [ ] 2.3 Write `ConfidentialInheritanceVault.sol` implementing:
         • Owner-set AES key (private)
@@ -51,7 +51,7 @@
         • `voteOwnerDead()` (Contacts)
         • `releaseKey()` auto/unlock after conditions
         • Events (`PingReceived`, `KeyReleased`)
-  - [ ] 2.4 Configure Sapphire network in `hardhat.config.ts` with RPC URL & confidential settings.
+  - [ ] 2.4 Configure Sapphire network in `hardhat.config.ts` with RPC URL & confidential settings. (https://docs.oasis.io/build/sapphire/)
   - [ ] 2.5 Write deployment & upgrade scripts in `scripts/deploy.ts` and verify on explorer.
   - [ ] 2.6 Generate ABI & TypeScript types via `typechain` for use with `viem` hooks.
   - [ ] 2.7 Create `useWalrusStorage.ts` wrapper: upload encrypted blobs, retrieve via CID, handle large files.
