@@ -21,9 +21,9 @@
 ## Tasks
 
 - [ ] 0.0 Project Scaffold & Initialization
-  - [ ] 0.1 Create directory structure `/frontend`, `/backend`, `/contracts` inside the repository root.
-  - [ ] 0.2 Initialise root `package.json` with workspaces pointing to the three sub-projects; add common dev-deps (`eslint`, `prettier`, `husky`, `lint-staged`).
-  - [ ] 0.3 Scaffold `/frontend` with **Next.js 15 (https://nextjs.org/docs) + TypeScript** (`npx create-next-app@latest`) and set the app directory layout.
+  - [x] 0.1 Create directory structure `/frontend`, `/backend`, `/contracts` inside the repository root.
+  - [x] 0.2 Initialise root `package.json` with workspaces pointing to the three sub-projects; add common dev-deps (`eslint`, `prettier`, `husky`, `lint-staged`).
+  - [x] 0.3 Scaffold `/frontend` with **Next.js 15 (https://nextjs.org/docs) + TypeScript** (`npx create-next-app@latest`) and set the app directory layout.
   - [ ] 0.4 Scaffold `/backend` with **Express + TypeScript** (`npm init`, `ts-node`, `nodemon`) for any off-chain helpers or API routes.
   - [ ] 0.5 Scaffold `/contracts` with **Hardhat v3** (`npx hardhat init --typescript`).
   - [ ] 0.6 Add shared configuration files (`.eslintrc`, `.prettierrc`, `.editorconfig`) and root `.env.example`.
