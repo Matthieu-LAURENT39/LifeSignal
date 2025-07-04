@@ -1,0 +1,25 @@
+
+flowchart TD
+    Titre["Case : Death detection"]
+    Titre -.- A[User Alive]
+
+    P{"Providers"} --> P1[regular life signal ping]
+    P{"Providers"} --> P2[death detection API]
+    P{"Providers"} --> P3[contacts]
+
+    P3[contacts] --> C1[Contact 1]
+    P3[contacts] --> C2[Contact 2]
+    P3[contacts] --> C3[Contact 3]
+   
+    A -.-> B[if one providers detect a possible death]
+    B --> C[Death Suspected]
+    C -.-> D[grace period is triggered]
+    D --> E[Grace period]
+
+    E --> F[sending mandatory life signal ping] 
+
+    F --> R1[if no response]
+    F --> R2[if response]
+
+    R2 --> A
+    R1 --> G[User Dead]
