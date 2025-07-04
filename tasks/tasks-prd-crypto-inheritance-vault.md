@@ -3,7 +3,7 @@
 - `contracts/ConfidentialInheritanceVault.sol` – Confidential smart contract storing AES key, heirs, proof-of-life intervals, and release logic.
 - `contracts/scripts/deploy.ts` – Hardhat deployment script for Sapphire.
 - `contracts/hardhat.config.ts` – Hardhat configuration (Solidity version, Sapphire network, plugins).
-- `frontend/components/WalletConnectButton.tsx` – Re-usable RainbowKit wallet-connect component.
+- `frontend/components/WalletConnectButton.tsx` – Re-usable RainbowKit wallet-connect component with glassmorphism styling.
 - `frontend/components/VaultCreator.tsx` – UI for creating a vault, uploading files, and encrypting them client-side.
 - `frontend/components/VaultDashboard.tsx` – Owner dashboard listing vaults, pings, and heir status.
 - `frontend/components/HeirDecrypt.tsx` – Heir view to retrieve AES key and decrypt files.
@@ -17,8 +17,10 @@
 - `.prettierrc` – Prettier code formatting configuration.
 - `.editorconfig` – EditorConfig settings for consistent code style across editors.
 - `.env.example` – Environment variables template with all necessary configuration options.
-- `frontend/package.json` – Next.js 15 project configuration with TypeScript and TailwindCSS.
+- `frontend/package.json` – Next.js 15 project configuration with TypeScript, TailwindCSS, and Web3 libraries.
 - `frontend/app/` – Next.js app directory with layout.tsx and page.tsx.
+- `frontend/lib/wagmi.ts` – Wagmi configuration with Sapphire network and RainbowKit setup.
+- `frontend/app/providers.tsx` – Web3 providers wrapper with wagmi, RainbowKit, and React Query.
 - `backend/package.json` – Express backend configuration with TypeScript support.
 - `backend/src/index.ts` – Main Express server with middleware, basic routes, and error handling.
 - `backend/tsconfig.json` – TypeScript configuration for the backend.
@@ -47,9 +49,9 @@
   - [ ] 0.7 Commit the initial scaffold to Git.
 
 - [ ] 1.0 Front-End & Wallet Integration
-  - [ ] 1.1 Scaffold Next.js 15 project with React, TypeScript, TailwindCSS, and Framer-Motion. (https://nextjs.org/docs)
-  - [ ] 1.2 Install and configure `wagmi`, `@rainbow-me/rainbowkit`, and `viem`.
-  - [ ] 1.3 Implement `WalletConnectButton.tsx` with RainbowKit (https://rainbowkit.com/docs/introduction) themes to match glassmorphism UI. 
+  - [x] 1.1 Scaffold Next.js 15 project with React, TypeScript, TailwindCSS, and Framer-Motion. (https://nextjs.org/docs)
+  - [x] 1.2 Install and configure `wagmi`, `@rainbow-me/rainbowkit`, and `viem`.
+  - [x] 1.3 Implement `WalletConnectButton.tsx` with RainbowKit (https://rainbowkit.com/docs/introduction) themes to match glassmorphism UI. 
   - [ ] 1.4 Create global Tailwind config with dark gradient background and neon indigo-purple accent colors.
   - [ ] 1.5 Build `VaultCreator.tsx` for uploading files, client-side AES-256 encryption, and Walrus upload (https://docs.wal.app/).
   - [ ] 1.6 Build `VaultDashboard.tsx` listing vaults, last ping dates, heirs, and controls to add/remove files.
