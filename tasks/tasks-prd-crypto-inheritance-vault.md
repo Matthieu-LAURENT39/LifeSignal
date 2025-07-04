@@ -19,6 +19,12 @@
 - `backend/src/index.ts` – Main Express server with middleware, basic routes, and error handling.
 - `backend/tsconfig.json` – TypeScript configuration for the backend.
 - `backend/.env.example` – Environment variables template.
+- `contracts/package.json` – Hardhat v2 project configuration with TypeScript support.
+- `contracts/hardhat.config.ts` – Hardhat configuration file.
+- `contracts/contracts/Lock.sol` – Sample smart contract (to be replaced with inheritance contract).
+- `contracts/test/Lock.ts` – Sample test file (to be replaced with inheritance tests).
+- `contracts/ignition/modules/Lock.ts` – Sample deployment module.
+- `contracts/typechain-types/` – Generated TypeScript types for smart contracts.
 
 ### Notes
 
@@ -32,7 +38,7 @@
   - [x] 0.2 Initialise root `package.json` with workspaces pointing to the three sub-projects; add common dev-deps (`eslint`, `prettier`, `husky`, `lint-staged`).
   - [x] 0.3 Scaffold `/frontend` with **Next.js 15 (https://nextjs.org/docs) + TypeScript** (`npx create-next-app@latest`) and set the app directory layout.
   - [x] 0.4 Scaffold `/backend` with **Express + TypeScript** (`npm init`, `ts-node`, `nodemon`) for any off-chain helpers or API routes.
-  - [ ] 0.5 Scaffold `/contracts` with **Hardhat v3** (`npx hardhat init --typescript`).
+  - [x] 0.5 Scaffold `/contracts` with **Hardhat v2** (`npx hardhat init --typescript`).
   - [ ] 0.6 Add shared configuration files (`.eslintrc`, `.prettierrc`, `.editorconfig`) and root `.env.example`.
   - [ ] 0.7 Commit the initial scaffold to Git.
 

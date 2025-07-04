@@ -1,0 +1,32 @@
+{
+  "name": "contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for LifeSignal crypto inheritance vault",
+  "main": "index.js",
+  "scripts": {
+    "build": "hardhat compile",
+    "test": "hardhat test",
+    "test:gas": "REPORT_GAS=true hardhat test",
+    "deploy": "hardhat ignition deploy ignition/modules/Lock.ts",
+    "deploy:sepolia": "hardhat ignition deploy ignition/modules/Lock.ts --network sepolia",
+    "verify": "hardhat verify",
+    "coverage": "hardhat coverage",
+    "lint": "eslint contracts test ignition --ext .ts,.sol",
+    "lint:fix": "eslint contracts test ignition --ext .ts,.sol --fix"
+  },
+  "keywords": [
+    "hardhat",
+    "solidity",
+    "typescript",
+    "smart-contracts",
+    "blockchain",
+    "sapphire",
+    "inheritance"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.0.0",
+    "hardhat": "^2.25.0"
+  }
+}
