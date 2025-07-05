@@ -13,6 +13,88 @@ import OwnerRegistration from '../../components/OwnerRegistration';
 import VaultManager from '../../components/VaultManager';
 import { useLifeSignalRegistryRead, useLifeSignalRegistryWrite } from '../../lib/contracts';
 import { contractUtils } from '../../lib/contracts';
+import { decryptFile } from '../../lib/crypto/encryption';
+
+// Web Crypto API decryption function to match the encryption method used in VaultManager
+const decryptFileWebCrypto = async (
+  encryptedArrayBuffer: ArrayBuffer,
+  encryptionKey: string,
+  mimeType: string
+): Promise<Blob> => {
+  try {
+    console.log('=== DECRYPTION DEBUG ===');
+    console.log('Encryption key received:', encryptionKey.substring(0, 20) + '...');
+    console.log('Encrypted data size:', encryptedArrayBuffer.byteLength);
+    console.log('MIME type:', mimeType);
+    
+    let keyBuffer: Uint8Array;
+    let isBase64Key = false;
+    
+    // Try to detect if the key is base64 or a random string
+    try {
+      // First try to decode as base64
+      keyBuffer = Uint8Array.from(atob(encryptionKey), c => c.charCodeAt(0));
+      isBase64Key = true;
+      console.log('Key decoded as base64, length:', keyBuffer.length);
+    } catch (e) {
+      // If base64 decoding fails, treat as a random string and convert to bytes
+      console.log('Key is not base64, treating as random string');
+      const encoder = new TextEncoder();
+      const keyBytes = encoder.encode(encryptionKey);
+      // Pad or truncate to 32 bytes for AES-256
+      keyBuffer = new Uint8Array(32);
+      keyBuffer.set(keyBytes.slice(0, 32));
+      console.log('Key converted from string, padded to 32 bytes');
+    }
+    
+    console.log('Key buffer length:', keyBuffer.length);
+    console.log('Is base64 key:', isBase64Key);
+    
+    // Import the key
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyBuffer,
+      { name: 'AES-GCM' },
+      false,
+      ['decrypt']
+    );
+    
+    console.log('Key imported successfully');
+    
+    const encryptedArray = new Uint8Array(encryptedArrayBuffer);
+    console.log('Encrypted array length:', encryptedArray.length);
+    
+    // Extract IV from the beginning (first 12 bytes for AES-GCM)
+    const iv = encryptedArray.slice(0, 12);
+    const ciphertext = encryptedArray.slice(12);
+    
+    console.log('IV length:', iv.length);
+    console.log('Ciphertext length:', ciphertext.length);
+    console.log('IV (hex):', Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join(''));
+    
+    // Decrypt the data
+    console.log('Starting decryption...');
+    const decryptedData = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+      },
+      key,
+      ciphertext
+    );
+    
+    console.log('Decryption successful, size:', decryptedData.byteLength);
+    console.log('=== END DECRYPTION DEBUG ===');
+    
+    return new Blob([decryptedData], { type: mimeType });
+  } catch (error) {
+    console.error('=== DECRYPTION ERROR ===');
+    console.error('Error details:', error);
+    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('=== END DECRYPTION ERROR ===');
+    throw new Error(`Web Crypto decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
 
 export default function UserPortal() {
   const { address, isConnected } = useAccount();
@@ -53,6 +135,7 @@ export default function UserPortal() {
   const [showAliveConfirm, setShowAliveConfirm] = useState(false);
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   const [showRegistration, setShowRegistration] = useState(false);
+  const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
 
   const searchParams = useSearchParams();
   const isDebugMode = searchParams.get('debug') === 'true';
@@ -204,7 +287,7 @@ export default function UserPortal() {
           id: vaultId,
           name: names?.[index] || `Vault ${index + 1}`,
           owner: owners?.[index] || ownerAddr,
-          files: [], // Would need to fetch individual file details
+          files: [], // Files will be loaded by VaultManager component when vault is selected
           contacts: [], // Would need to fetch individual contact details
           isReleased: isReleased?.[index] || false,
           cypher: {
@@ -461,6 +544,117 @@ export default function UserPortal() {
       
     } catch (error) {
       console.error('Error creating contact:', error);
+    }
+  };
+
+  // Function to download and decrypt a file from a vault
+  const handleDownloadFile = async (vaultId: string, fileId: string, fileName: string) => {
+    const fileKey = `${vaultId}_${fileId}`;
+    
+    if (downloadingFiles.has(fileKey)) {
+      return; // Already downloading
+    }
+
+    setDownloadingFiles(prev => new Set(prev).add(fileKey));
+
+    try {
+      console.log('=== DOWNLOADING FILE ===');
+      console.log('Vault ID:', vaultId);
+      console.log('File ID:', fileId);
+      console.log('File Name:', fileName);
+
+      // Use readContract from wagmi to get vault and file info
+      const { readContract } = await import('wagmi/actions');
+      const { config } = await import('../../lib/wagmi');
+      const { LIFESIGNAL_REGISTRY_ABI, CONTRACT_ADDRESSES } = await import('../../lib/contracts');
+
+      // Get vault info from smart contract to get encryption key and IV
+      const vaultInfo = await readContract(config, {
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFESIGNAL_REGISTRY_ABI,
+        functionName: 'getVaultInfo',
+        args: [BigInt(vaultId)],
+      });
+      
+      if (!vaultInfo) {
+        throw new Error('Could not retrieve vault information');
+      }
+
+      console.log('Vault info retrieved:', vaultInfo);
+
+      // Get file info from smart contract to get CID
+      const fileInfo = await readContract(config, {
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFESIGNAL_REGISTRY_ABI,
+        functionName: 'getVaultFileInfo',
+        args: [BigInt(vaultId), BigInt(fileId)],
+      });
+
+      if (!fileInfo) {
+        throw new Error('Could not retrieve file information');
+      }
+
+      console.log('File info retrieved:', fileInfo);
+
+      // Extract file data
+      const originalName = fileInfo[0] as string;
+      const mimeType = fileInfo[1] as string;
+      const cid = fileInfo[2] as string;
+      const uploadDate = fileInfo[3] as string;
+      const exists = fileInfo[4] as boolean;
+      
+      if (!exists) {
+        throw new Error('File does not exist');
+      }
+
+      // Extract vault encryption data
+      const cypherIv = vaultInfo[4] as string;
+      const encryptionKey = vaultInfo[5] as string;
+
+      console.log('Downloading from Walrus with CID:', cid);
+
+      // Retrieve encrypted file from Walrus using direct HTTP API
+      const res = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${cid}`);
+      if (!res.ok) throw new Error("Download failed: " + res.statusText);
+      const blob = await res.blob();
+      const encryptedArrayBuffer = await blob.arrayBuffer();
+      
+      console.log('File retrieved from Walrus, size:', encryptedArrayBuffer.byteLength);
+
+      // Decrypt the file using Web Crypto API (matching the encryption method)
+      const decryptedBlob = await decryptFileWebCrypto(
+        encryptedArrayBuffer,
+        encryptionKey,
+        mimeType
+      );
+
+      console.log('File decrypted successfully');
+
+      // Download the decrypted file
+      const url = URL.createObjectURL(decryptedBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = originalName || fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      console.log('File downloaded successfully');
+      console.log('=== DOWNLOAD COMPLETE ===');
+
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      
+      // Show a simple alert for now - in production you'd want a better toast notification
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to download file: ${errorMessage}`);
+    } finally {
+      setDownloadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileKey);
+        return newSet;
+      });
     }
   };
 
@@ -759,7 +953,7 @@ export default function UserPortal() {
               {/* Blockchain Vault Manager */}
               <div className="mb-12">
                 <h2 className="text-2xl font-semibold text-white mb-6">Blockchain Vault Manager</h2>
-                <VaultManager />
+                <VaultManager onVaultSelect={setSelectedVault} />
               </div>
               
               {/* Contacts Section */}
@@ -841,17 +1035,53 @@ export default function UserPortal() {
 
             {/* Files list */}
             <div className="mb-6">
-              <h4 className="text-lg font-medium text-white mb-2">Files</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-lg font-medium text-white">Files</h4>
+                {isDebugMode && (
+                  <p className="text-xs text-emerald-400/60">
+                    🔍 Hover over files to download
+                  </p>
+                )}
+              </div>
               {!selectedVault.files?.length ? (
                 <p className="text-white/50 text-sm">No files</p>
               ) : (
                 <ul className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                  {selectedVault.files.map(f => (
-                    <li key={f.id} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/80 text-sm">
-                      <span>{f.originalName}</span>
-                      <span className="text-white/40 text-xs">{f.mimeType}</span>
-                    </li>
-                  ))}
+                  {selectedVault.files.map(f => {
+                    const fileKey = `${selectedVault.id}_${f.id}`;
+                    const isDownloading = downloadingFiles.has(fileKey);
+                    
+                    return (
+                      <li key={f.id} className="group flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/80 text-sm hover:bg-white/10 transition-colors">
+                        <div className="flex items-center gap-3 flex-1">
+                          <span>{f.originalName}</span>
+                          <span className="text-white/40 text-xs">{f.mimeType}</span>
+                        </div>
+                        
+                        {/* Download button - always visible */}
+                        <button
+                          onClick={() => handleDownloadFile(selectedVault.id, f.id, f.originalName)}
+                          disabled={isDownloading}
+                          className="flex items-center gap-1 px-2 py-1 text-xs bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-md text-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                          title="Download & decrypt file"
+                        >
+                          {isDownloading ? (
+                            <>
+                              <div className="w-3 h-3 border border-emerald-300 border-t-transparent rounded-full animate-spin"></div>
+                              <span>...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              <span>Get</span>
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

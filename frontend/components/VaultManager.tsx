@@ -9,6 +9,7 @@ import type { Vault, VaultFile, Contact } from '../types/models';
 
 interface VaultManagerProps {
   className?: string;
+  onVaultSelect?: (vault: Vault) => void;
 }
 
 // Encryption utilities
@@ -93,7 +94,7 @@ const uploadToWalrus = async (encryptedData: ArrayBuffer, filename: string): Pro
   }
 };
 
-export default function VaultManager({ className = '' }: VaultManagerProps) {
+export default function VaultManager({ className = '', onVaultSelect }: VaultManagerProps) {
   const { address, isConnected } = useAccount();
   const { writeContract, isPending, error: writeError } = useLifeSignalRegistryWrite();
 
@@ -142,46 +143,99 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
 
   // Load vault details when vault list is available
   useEffect(() => {
-    if (!vaultListDetails || !Array.isArray(vaultListDetails) || vaultListDetails.length < 8) {
-      setVaults([]);
+    const loadVaultDetails = async () => {
+      if (!vaultListDetails || !Array.isArray(vaultListDetails) || vaultListDetails.length < 8) {
+        setVaults([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // vaultListDetails is an array: [vaultIds, names, vaultOwners, isReleased, cypherIvs, encryptionKeys, fileIds, authorizedContacts]
+      const vaultIds = vaultListDetails[0] as readonly bigint[];
+      const names = vaultListDetails[1] as readonly string[];
+      const vaultOwners = vaultListDetails[2] as readonly string[];
+      const isReleased = vaultListDetails[3] as readonly boolean[];
+      const cypherIvs = vaultListDetails[4] as readonly string[];
+      const encryptionKeys = vaultListDetails[5] as readonly string[];
+      const fileIds = vaultListDetails[6] as readonly (readonly bigint[])[];
+      const authorizedContacts = vaultListDetails[7] as readonly (readonly string[])[];
+
+      if (!vaultIds || vaultIds.length === 0) {
+        setVaults([]);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('Loading vault details with file data...');
+      
+      // Create vault objects with real data from blockchain, including files
+      const vaultDetails: Vault[] = await Promise.all(
+        vaultIds.map(async (vaultId: bigint, index: number) => {
+          const vaultFileIds = fileIds?.[index] || [];
+          
+          // Fetch file details for each file in this vault
+          const filePromises = await Promise.all(
+            vaultFileIds.map(async (fileId: bigint) => {
+              try {
+                // Import readContract dynamically to avoid SSR issues
+                const { readContract } = await import('wagmi/actions');
+                const { config } = await import('../lib/wagmi');
+                
+                const fileInfo = await readContract(config, {
+                  address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+                  abi: LIFESIGNAL_REGISTRY_ABI,
+                  functionName: 'getVaultFileInfo',
+                  args: [vaultId, fileId],
+                });
+
+                if (fileInfo && fileInfo[4]) { // exists is the 5th element
+                  return {
+                    id: fileId.toString(),
+                    originalName: fileInfo[0] as string,
+                    mimeType: fileInfo[1] as string,
+                    cid: fileInfo[2] as string,
+                    uploadDate: fileInfo[3] as string,
+                    size: 0, // Size not stored in contract
+                    iv: cypherIvs?.[index] || '', // Use vault IV for now
+                    encryptionKey: encryptionKeys?.[index] || '' // Use vault key for now
+                  } as VaultFile;
+                }
+                return null;
+              } catch (error) {
+                console.error(`Error fetching file ${fileId} for vault ${vaultId}:`, error);
+                return null;
+              }
+            })
+          );
+
+          // Filter out null files
+          const validFiles = filePromises.filter((file): file is VaultFile => file !== null);
+          
+          console.log(`Vault ${vaultId} has ${validFiles.length} files:`, validFiles.map(f => f.originalName));
+
+          return {
+            id: vaultId.toString(),
+            name: names?.[index] || `Vault ${index + 1}`,
+            owner: vaultOwners?.[index] || address || '',
+            files: validFiles,
+            contacts: [], // Would need to fetch individual contact details
+            isReleased: isReleased?.[index] || false,
+            cypher: {
+              iv: cypherIvs?.[index] || 'placeholder',
+              encryptionKey: encryptionKeys?.[index] || 'placeholder'
+            },
+            // Store the authorized contacts count for display
+            authorizedContactsCount: authorizedContacts?.[index]?.length || 0
+          };
+        })
+      );
+
+      console.log('Final vault details with files:', vaultDetails);
+      setVaults(vaultDetails);
       setIsLoading(false);
-      return;
-    }
+    };
 
-    // vaultListDetails is an array: [vaultIds, names, vaultOwners, isReleased, cypherIvs, encryptionKeys, fileIds, authorizedContacts]
-    const vaultIds = vaultListDetails[0] as readonly bigint[];
-    const names = vaultListDetails[1] as readonly string[];
-    const vaultOwners = vaultListDetails[2] as readonly string[];
-    const isReleased = vaultListDetails[3] as readonly boolean[];
-    const cypherIvs = vaultListDetails[4] as readonly string[];
-    const encryptionKeys = vaultListDetails[5] as readonly string[];
-    const fileIds = vaultListDetails[6] as readonly (readonly bigint[])[];
-    const authorizedContacts = vaultListDetails[7] as readonly (readonly string[])[];
-
-    if (!vaultIds || vaultIds.length === 0) {
-      setVaults([]);
-      setIsLoading(false);
-      return;
-    }
-
-    // Create vault objects with real data from blockchain
-    const vaultDetails: Vault[] = vaultIds.map((vaultId: bigint, index: number) => ({
-      id: vaultId.toString(),
-      name: names?.[index] || `Vault ${index + 1}`,
-      owner: vaultOwners?.[index] || address || '',
-      files: [], // Would need to fetch individual file details
-      contacts: [], // Would need to fetch individual contact details
-      isReleased: isReleased?.[index] || false,
-      cypher: {
-        iv: cypherIvs?.[index] || 'placeholder',
-        encryptionKey: encryptionKeys?.[index] || 'placeholder'
-      },
-      // Store the authorized contacts count for display
-      authorizedContactsCount: authorizedContacts?.[index]?.length || 0
-    }));
-
-    setVaults(vaultDetails);
-    setIsLoading(false);
+    loadVaultDetails();
   }, [vaultListDetails, address]);
 
   // Get detailed contact list using wagmi v2 hooks
@@ -312,17 +366,38 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
       console.log('=== BULK FILE ENCRYPTION DEBUG ===');
       console.log('Total files to process:', uploadedFiles.length);
 
-      // Process all files
+      // Get the vault's encryption key to use for all files
+      const vaultEncryptionKey = selectedVault.cypher.encryptionKey;
+      console.log('Using vault encryption key for all files:', vaultEncryptionKey.substring(0, 8) + '...');
+
+      // Convert vault key to Web Crypto API format
+      let keyBuffer: Uint8Array;
+      try {
+        // Try to decode as base64 first
+        keyBuffer = Uint8Array.from(atob(vaultEncryptionKey), c => c.charCodeAt(0));
+      } catch (e) {
+        // If not base64, treat as string and pad/truncate to 32 bytes
+        const encoder = new TextEncoder();
+        const keyBytes = encoder.encode(vaultEncryptionKey);
+        keyBuffer = new Uint8Array(32);
+        keyBuffer.set(keyBytes.slice(0, 32));
+      }
+      
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyBuffer,
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt']
+      );
+
+      // Process all files with the same vault key
       for (const file of uploadedFiles) {
-        // Generate encryption key for each file
-        const encryptionKey = await generateEncryptionKey();
-        const exportedKey = await exportKey(encryptionKey);
-
         console.log(`Processing file: ${file.name}`);
-        console.log(`Encryption Key (Base64): ${exportedKey}`);
+        console.log(`Using vault encryption key`);
 
-        // Encrypt file
-        const encryptionResult = await encryptFile(file, encryptionKey);
+        // Encrypt file with vault key
+        const encryptionResult = await encryptFile(file, cryptoKey);
         
         // Console log the IV
         const ivHex = Array.from(encryptionResult.iv)
@@ -377,7 +452,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
         abi: LIFESIGNAL_REGISTRY_ABI,
         functionName: 'authorizeVaultContact',
-        args: [BigInt(selectedVault.id), contactToAuthorize as `0x${string}`],
+        args: [BigInt(selectedVault.id) as any, contactToAuthorize as `0x${string}`],
       });
 
       setShowAuthorizeContact(false);
@@ -406,7 +481,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
         abi: LIFESIGNAL_REGISTRY_ABI,
         functionName: 'releaseVault',
-        args: [BigInt(vaultId)],
+        args: [BigInt(vaultId) as any],
       });
       
       // Reload vaults after a delay
@@ -503,11 +578,19 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
+                  onClick={() => onVaultSelect && onVaultSelect(vault)}
+                  className="flex-1 px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-300 text-sm rounded-lg transition-colors"
+                >
+                  View Files
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => {
                     setSelectedVault(vault);
                     setShowAddFile(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-white/10 text-white text-sm rounded-lg hover:bg-white/20 transition-colors"
+                  className="px-4 py-2 bg-white/10 text-white text-sm rounded-lg hover:bg-white/20 transition-colors"
                 >
                   Add File
                 </motion.button>
@@ -518,7 +601,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
                     setSelectedVault(vault);
                     setShowAuthorizeContact(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-white/10 text-white text-sm rounded-lg hover:bg-white/20 transition-colors"
+                  className="px-4 py-2 bg-white/10 text-white text-sm rounded-lg hover:bg-white/20 transition-colors"
                 >
                   Add Contact
                 </motion.button>

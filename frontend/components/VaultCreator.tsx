@@ -205,14 +205,13 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       console.log('All Blob IDs:', walrusBlobIds);
       console.log('=== END VAULT ENCRYPTION DEBUG ===');
       
-      // Generate cypherIV and encryptionKey for blockchain
-      const cypherIV = Math.random().toString(36).substring(2, 18); // 16 character random string
-      const blockchainEncryptionKey = Math.random().toString(36).substring(2, 34); // 32 character random string
+      // Use the actual encryption key for blockchain storage
+      const cypherIV = Math.random().toString(36).substring(2, 18); // 16 character random string for IV
       
       console.log('Creating vault with:', {
         name,
         cypherIV,
-        encryptionKey: blockchainEncryptionKey.substring(0, 8) + '...' // Log partial key for security
+        encryptionKey: exportedKey.substring(0, 8) + '...' // Log partial key for security
       });
 
       // Create vault on blockchain using smart contract
@@ -225,15 +224,15 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
         throw new Error('writeContract is not a function');
       }
       
-      // Call writeContract directly to trigger MetaMask popup
-      console.log('About to call writeContract with args:', [name, cypherIV, blockchainEncryptionKey]);
+      // Call writeContract directly to trigger MetaMask popup - use the real encryption key
+      console.log('About to call writeContract with args:', [name, cypherIV, exportedKey]);
       
       try {
         const result = await writeContract({
           address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
           abi: LIFESIGNAL_REGISTRY_ABI,
           functionName: 'createVault',
-          args: [name, cypherIV, blockchainEncryptionKey],
+          args: [name, cypherIV, exportedKey],
         });
 
         console.log('Vault creation transaction result:', result);

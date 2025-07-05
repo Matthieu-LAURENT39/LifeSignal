@@ -3,8 +3,61 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
-import { useMockWalrusStorage } from '../hooks/useWalrusStorage';
 import { decryptFile } from '../lib/crypto/encryption';
+
+// Web Crypto API decryption function to match the encryption method used in VaultManager
+const decryptFileWebCrypto = async (
+  encryptedArrayBuffer: ArrayBuffer,
+  encryptionKey: string,
+  mimeType: string
+): Promise<Blob> => {
+  try {
+    let keyBuffer: Uint8Array;
+    
+    // Try to detect if the key is base64 or a random string
+    try {
+      // First try to decode as base64
+      keyBuffer = Uint8Array.from(atob(encryptionKey), c => c.charCodeAt(0));
+    } catch (e) {
+      // If base64 decoding fails, treat as a random string and convert to bytes
+      console.log('Key is not base64, treating as random string');
+      const encoder = new TextEncoder();
+      const keyBytes = encoder.encode(encryptionKey);
+      // Pad or truncate to 32 bytes for AES-256
+      keyBuffer = new Uint8Array(32);
+      keyBuffer.set(keyBytes.slice(0, 32));
+    }
+    
+    // Import the key
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyBuffer,
+      { name: 'AES-GCM' },
+      false,
+      ['decrypt']
+    );
+    
+    const encryptedArray = new Uint8Array(encryptedArrayBuffer);
+    
+    // Extract IV from the beginning (first 12 bytes for AES-GCM)
+    const iv = encryptedArray.slice(0, 12);
+    const ciphertext = encryptedArray.slice(12);
+    
+    // Decrypt the data
+    const decryptedData = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+      },
+      key,
+      ciphertext
+    );
+    
+    return new Blob([decryptedData], { type: mimeType });
+  } catch (error) {
+    throw new Error(`Web Crypto decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
 
 interface Contact {
   id: string;
@@ -66,7 +119,7 @@ export function VaultDashboard({ className = '' }: VaultDashboardProps) {
     votingWeight: 1
   });
 
-  const { retrieveFile } = useMockWalrusStorage();
+
 
   // Mock data - in a real app, this would come from the blockchain
   useEffect(() => {
@@ -317,12 +370,16 @@ export function VaultDashboard({ className = '' }: VaultDashboardProps) {
 
   const handleDownloadFile = async (file: VaultFile, vault: Vault) => {
     try {
-      // In a real app, this would decrypt using the master key from the smart contract
-      const encryptedData = await retrieveFile(file.cid);
-      const decryptedBlob = await decryptFile(
-        encryptedData,
-        vault.masterKey,
-        file.iv,
+      // Retrieve encrypted file from Walrus using direct HTTP API
+      const res = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${file.cid}`);
+      if (!res.ok) throw new Error("Download failed: " + res.statusText);
+      const blob = await res.blob();
+      const encryptedArrayBuffer = await blob.arrayBuffer();
+
+      // Decrypt the file using Web Crypto API (matching the encryption method)
+      const decryptedBlob = await decryptFileWebCrypto(
+        encryptedArrayBuffer,
+        file.encryptionKey,
         file.mimeType
       );
 
