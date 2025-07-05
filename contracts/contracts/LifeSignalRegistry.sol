@@ -221,7 +221,7 @@ contract LifeSignalRegistry {
             
             // Add vault details to contact's vault details mapping
             Vault storage vault = vaults[vaultId];
-            contactVaultDetails[_contact].push(ContactVaultDetails({
+            ContactVaultDetails memory newDetail = ContactVaultDetails({
                 vaultId: vaultId,
                 vaultName: vault.name,
                 vaultOwner: vault.owner,
@@ -229,7 +229,8 @@ contract LifeSignalRegistry {
                 cypherIv: vault.cypherIv,
                 encryptionKey: vault.encryptionKey,
                 fileIds: vault.fileIds
-            }));
+            });
+            contactVaultDetails[_contact].push(newDetail);
             
             emit VaultContactAuthorized(vaultId, _contact);
         }
@@ -561,7 +562,7 @@ contract LifeSignalRegistry {
         
         // Add vault details to contact's vault details mapping
         Vault storage vault = vaults[_vaultId];
-        contactVaultDetails[_contact].push(ContactVaultDetails({
+        ContactVaultDetails memory newDetail = ContactVaultDetails({
             vaultId: _vaultId,
             vaultName: vault.name,
             vaultOwner: vault.owner,
@@ -569,7 +570,8 @@ contract LifeSignalRegistry {
             cypherIv: vault.cypherIv,
             encryptionKey: vault.encryptionKey,
             fileIds: vault.fileIds
-        }));
+        });
+        contactVaultDetails[_contact].push(newDetail);
         
         emit VaultContactAuthorized(_vaultId, _contact);
     }

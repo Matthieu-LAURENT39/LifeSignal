@@ -762,7 +762,7 @@ export const LIFESIGNAL_REGISTRY_ABI = [
 
 // Contract addresses
 export const CONTRACT_ADDRESSES = {
-  LIFESIGNAL_REGISTRY: '0xD11b3e853d3d1e4C5e7c11B11984528CD78D4733' as `0x${string}`,
+  LIFESIGNAL_REGISTRY: '0x3081562F0cf679933FE60997e4b3e13e67472fEd' as `0x${string}`,
 } as const;
 
 // Hook to use contract read functions
