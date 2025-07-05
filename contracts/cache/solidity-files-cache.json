@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/home/mathis/projects/web3/LifeSignal/contracts/contracts/LifeSignalRegistry.sol": {
-      "lastModificationDate": 1751730254886,
-      "contentHash": "f86d4192c33429591301ffa92c761357",
+      "lastModificationDate": 1751734719190,
+      "contentHash": "0d3c17705a215f1ff713b19e516dd3a4",
       "sourceName": "contracts/LifeSignalRegistry.sol",
       "solcConfig": {
         "version": "0.8.19",

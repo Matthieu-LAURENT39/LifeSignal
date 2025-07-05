@@ -10,6 +10,7 @@ import type { Vault, VaultFile, Owner, Contact } from '../../types/models';
 import VaultCreator from '../../components/VaultCreator';
 import ContactCreator from '../../components/ContactCreator';
 import OwnerRegistration from '../../components/OwnerRegistration';
+import VaultManager from '../../components/VaultManager';
 import { useLifeSignalRegistryRead, useLifeSignalRegistryWrite } from '../../lib/contracts';
 
 const buildMockData = (ownerAddr: string): Owner => {
@@ -109,7 +110,7 @@ const buildMockData = (ownerAddr: string): Owner => {
 export default function UserPortal() {
   const { address, isConnected } = useAccount();
   const { data: ownerInfo, error: ownerError, isLoading: ownerLoading } = useReadContract({
-    address: '0xf64c07E6D898e665ffAABd937890C7ee7EC4f7A8' as `0x${string}`,
+    address: '0x2449E7b5a5e252A2B5890d0537649738E7c953Eb' as `0x${string}`,
     abi: [
       {
         "inputs": [
@@ -201,13 +202,15 @@ export default function UserPortal() {
     if (ownerInfo) {
       const [firstName, lastName, lastHeartbeat, graceInterval, isDeceased, exists] = ownerInfo;
       
+      console.log('Owner info from contract:', { firstName, lastName, exists, isDeceased, lastHeartbeat, graceInterval });
+      
       if (exists) {
         console.log('User is already registered:', { firstName, lastName, exists, isDeceased });
         setIsRegistered(true);
         // Load user data if registered
         setCurrentUser(buildMockData(address));
       } else {
-        console.log('User is not registered');
+        console.log('User is not registered - exists is false');
         setIsRegistered(false);
       }
     } else {
@@ -469,7 +472,7 @@ export default function UserPortal() {
                   <span className="text-sm font-medium text-emerald-400">Privacy Protected</span>
                 </div>
                 <p className="text-xs text-white/70">
-                  All data is encrypted using Oasis Sapphire's confidential computing before being stored on the blockchain.
+                  Your data is stored securely on the Oasis Sapphire blockchain with transparent and immutable records.
                 </p>
               </div>
               
@@ -709,6 +712,12 @@ export default function UserPortal() {
                 </div>
               </div>
             ))}
+          </div>
+          
+          {/* Blockchain Vault Manager */}
+          <div className="mb-12">
+            <h2 className="text-2xl font-semibold text-white mb-6">Blockchain Vault Manager</h2>
+            <VaultManager />
           </div>
           
           {/* Contacts Section */}

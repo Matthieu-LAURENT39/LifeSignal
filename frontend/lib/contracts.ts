@@ -38,24 +38,9 @@ export const LIFESIGNAL_REGISTRY_ABI = [
   {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "_firstName",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_lastName",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_email",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_phone",
-        "type": "string"
+        "internalType": "address",
+        "name": "_contact",
+        "type": "address"
       },
       {
         "internalType": "bool",
@@ -118,12 +103,404 @@ export const LIFESIGNAL_REGISTRY_ABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_owner",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_contact",
+        "type": "address"
+      }
+    ],
+    "name": "getContactInfo",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "hasVotingRight",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "isVerified",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_owner",
+        "type": "address"
+      }
+    ],
+    "name": "getContactList",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_owner",
+        "type": "address"
+      }
+    ],
+    "name": "getDeathDeclarationStatus",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "startTime",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "votesFor",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "votesAgainst",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "totalVotingContacts",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "consensusReached",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_owner",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_voter",
+        "type": "address"
+      }
+    ],
+    "name": "hasVoted",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_owner",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_voter",
+        "type": "address"
+      }
+    ],
+    "name": "getVote",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaultId",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "_name",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_cypherIv",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_encryptionKey",
+        "type": "string"
+      }
+    ],
+    "name": "createVault",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaultId",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "_fileId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_originalName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_mimeType",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_cid",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_uploadDate",
+        "type": "string"
+      }
+    ],
+    "name": "addVaultFile",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaultId",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_contact",
+        "type": "address"
+      }
+    ],
+    "name": "authorizeVaultContact",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaultId",
+        "type": "address"
+      }
+    ],
+    "name": "releaseVault",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaultId",
+        "type": "address"
+      }
+    ],
+    "name": "getVaultInfo",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "isReleased",
+        "type": "bool"
+      },
+      {
+        "internalType": "string",
+        "name": "cypherIv",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "encryptionKey",
+        "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaultId",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "_fileId",
+        "type": "string"
+      }
+    ],
+    "name": "getVaultFileInfo",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "originalName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "mimeType",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "cid",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "uploadDate",
+        "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaultId",
+        "type": "address"
+      }
+    ],
+    "name": "getVaultAuthorizedContacts",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_owner",
+        "type": "address"
+      }
+    ],
+    "name": "getOwnerVaultList",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaultId",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_address",
+        "type": "address"
+      }
+    ],
+    "name": "isVaultAuthorized",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ] as const;
 
 // Contract addresses
 export const CONTRACT_ADDRESSES = {
-  LIFESIGNAL_REGISTRY: '0xf64c07E6D898e665ffAABd937890C7ee7EC4f7A8' as `0x${string}`,
+  LIFESIGNAL_REGISTRY: '0x2449E7b5a5e252A2B5890d0537649738E7c953Eb' as `0x${string}`,
 } as const;
 
 // Hook to use contract read functions
@@ -139,61 +516,7 @@ export function useLifeSignalRegistryWrite() {
   return useWriteContract();
 }
 
-// Utility function to encrypt data for Sapphire
-export async function encryptForSapphire(data: string): Promise<string> {
-  try {
-    // For Oasis Sapphire compatibility, we'll use a simple encoding
-    // that can be processed by the confidential computing environment
-    const encoder = new TextEncoder();
-    const dataBytes = encoder.encode(data);
-    
-    // Create a simple encryption using XOR with a key
-    // This is a placeholder - in production you'd use proper Sapphire encryption
-    const key = new Uint8Array([0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x7a, 0x8b]);
-    const encrypted = new Uint8Array(dataBytes.length);
-    
-    for (let i = 0; i < dataBytes.length; i++) {
-      encrypted[i] = dataBytes[i] ^ key[i % key.length];
-    }
-    
-    // Convert to base64 for storage
-    return btoa(String.fromCharCode(...encrypted));
-  } catch (error) {
-    console.error('Encryption failed:', error);
-    // Fallback to base64 encoding
-    return btoa(unescape(encodeURIComponent(data)));
-  }
-}
 
-// Utility function to decrypt data from Sapphire
-export async function decryptFromSapphire(encryptedData: string): Promise<string> {
-  try {
-    // Convert from base64 to Uint8Array
-    const encryptedBytes = new Uint8Array(
-      atob(encryptedData).split('').map(char => char.charCodeAt(0))
-    );
-    
-    // Decrypt using the same XOR key
-    const key = new Uint8Array([0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x7a, 0x8b]);
-    const decrypted = new Uint8Array(encryptedBytes.length);
-    
-    for (let i = 0; i < encryptedBytes.length; i++) {
-      decrypted[i] = encryptedBytes[i] ^ key[i % key.length];
-    }
-    
-    // Convert back to string
-    const decoder = new TextDecoder();
-    return decoder.decode(decrypted);
-  } catch (error) {
-    console.error('Decryption failed:', error);
-    // Fallback to base64 decoding
-    try {
-      return decodeURIComponent(escape(atob(encryptedData)));
-    } catch {
-      return encryptedData;
-    }
-  }
-}
 
 // Utility function to convert days to seconds
 export function daysToSeconds(days: number): bigint {
@@ -218,21 +541,15 @@ export const contractUtils = {
   ) => {
     const graceIntervalSeconds = daysToSeconds(graceInterval);
     
-    // Encrypt sensitive data
-    const encryptedFirstName = await encryptForSapphire(firstName);
-    const encryptedLastName = await encryptForSapphire(lastName);
-    const encryptedEmail = await encryptForSapphire(email);
-    const encryptedPhone = await encryptForSapphire(phone);
-    
     return writeContract({
       address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'registerOwner',
       args: [
-        encryptedFirstName,
-        encryptedLastName,
-        encryptedEmail,
-        encryptedPhone,
+        firstName,
+        lastName,
+        email,
+        phone,
         graceIntervalSeconds
       ],
     });
@@ -247,21 +564,15 @@ export const contractUtils = {
     phone: string,
     hasVotingRight: boolean
   ) => {
-    // Encrypt sensitive data
-    const encryptedFirstName = await encryptForSapphire(firstName);
-    const encryptedLastName = await encryptForSapphire(lastName);
-    const encryptedEmail = await encryptForSapphire(email);
-    const encryptedPhone = await encryptForSapphire(phone);
-    
     return writeContract({
       address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'addContact',
       args: [
-        encryptedFirstName,
-        encryptedLastName,
-        encryptedEmail,
-        encryptedPhone,
+        firstName,
+        lastName,
+        email,
+        phone,
         hasVotingRight
       ],
     });
@@ -284,6 +595,147 @@ export const contractUtils = {
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'getOwnerInfo',
       args: [ownerAddress],
+    });
+  },
+
+  // Create a new vault
+  createVault: async (
+    writeContract: any,
+    vaultId: string,
+    name: string,
+    cypherIv: string,
+    encryptionKey: string
+  ) => {
+    console.log('contractUtils.createVault called with:', { vaultId, name, cypherIv, encryptionKey });
+    
+    try {
+      const result = await writeContract({
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFESIGNAL_REGISTRY_ABI,
+        functionName: 'createVault',
+        args: [vaultId, name, cypherIv, encryptionKey],
+      });
+      
+      console.log('writeContract result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in createVault contract call:', error);
+      throw error;
+    }
+  },
+
+  // Add a file to a vault
+  addVaultFile: async (
+    writeContract: any,
+    vaultId: string,
+    fileId: string,
+    originalName: string,
+    mimeType: string,
+    cid: string,
+    uploadDate: string
+  ) => {
+    return writeContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'addVaultFile',
+      args: [vaultId, fileId, originalName, mimeType, cid, uploadDate],
+    });
+  },
+
+  // Authorize a contact to access a vault
+  authorizeVaultContact: async (
+    writeContract: any,
+    vaultId: string,
+    contact: string
+  ) => {
+    return writeContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'authorizeVaultContact',
+      args: [vaultId, contact],
+    });
+  },
+
+  // Release a vault
+  releaseVault: async (
+    writeContract: any,
+    vaultId: string
+  ) => {
+    return writeContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'releaseVault',
+      args: [vaultId],
+    });
+  },
+
+  // Get vault information
+  getVaultInfo: async (readContract: any, vaultId: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'getVaultInfo',
+      args: [vaultId],
+    });
+  },
+
+  // Get vault file information
+  getVaultFileInfo: async (readContract: any, vaultId: string, fileId: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'getVaultFileInfo',
+      args: [vaultId, fileId],
+    });
+  },
+
+  // Get vault's authorized contacts
+  getVaultAuthorizedContacts: async (readContract: any, vaultId: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'getVaultAuthorizedContacts',
+      args: [vaultId],
+    });
+  },
+
+  // Get owner's vault list
+  getOwnerVaultList: async (readContract: any, owner: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'getOwnerVaultList',
+      args: [owner],
+    });
+  },
+
+  // Check if address is authorized for vault
+  isVaultAuthorized: async (readContract: any, vaultId: string, address: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'isVaultAuthorized',
+      args: [vaultId, address],
+    });
+  },
+
+  // Get contact list
+  getContactList: async (readContract: any, owner: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'getContactList',
+      args: [owner],
+    });
+  },
+
+  // Get contact info
+  getContactInfo: async (readContract: any, owner: string, contact: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'getContactInfo',
+      args: [owner, contact],
     });
   }
 }; 

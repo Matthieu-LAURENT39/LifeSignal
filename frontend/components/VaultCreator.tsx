@@ -2,6 +2,8 @@
 
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useAccount } from 'wagmi';
+import { useLifeSignalRegistryWrite, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import type { User, VaultFile } from '../types/models';
 
 interface VaultCreatorProps {
@@ -18,20 +20,131 @@ interface VaultCreatorProps {
 type Step = 'name' | 'files' | 'contacts';
 
 export default function VaultCreator({ isOpen, onClose, onSubmit, availableContacts }: VaultCreatorProps) {
+  const { address, isConnected } = useAccount();
+  const { writeContract, isPending, error: writeError } = useLifeSignalRegistryWrite();
+  
+  // Debug logging
+  console.log('VaultCreator state:', { isConnected, address, writeContract, isPending, writeError });
+  
   const [name, setName] = useState('');
+  const [vaultId, setVaultId] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [step, setStep] = useState<Step>('name');
+  const [isCreating, setIsCreating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ name, files, selectedContacts });
-    // Reset form
-    setName('');
-    setFiles([]);
-    setSelectedContacts([]);
-    setStep('name');
+    
+    if (!isConnected || !address || !writeContract) {
+      console.error('Wallet not connected or missing required data:', { isConnected, address, writeContract });
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    // Check if user is on the correct network (Sapphire Testnet)
+    if (typeof window !== 'undefined' && window.ethereum) {
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const sapphireTestnetChainId = '0x5aff'; // 23295 in hex
+      
+      if (chainId !== sapphireTestnetChainId) {
+        alert('Please switch to Sapphire Testnet network in your wallet');
+        return;
+      }
+    }
+
+
+
+    if (!name.trim()) {
+      console.error('Vault name is required');
+      alert('Please enter a vault name');
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      
+      // Generate cypherIV and encryptionKey
+      const cypherIV = Math.random().toString(36).substring(2, 18); // 16 character random string
+      const encryptionKey = Math.random().toString(36).substring(2, 34); // 32 character random string
+      
+      const vaultIdToUse = vaultId || address;
+      
+      console.log('Creating vault with:', {
+        vaultId: vaultIdToUse,
+        name,
+        cypherIV,
+        encryptionKey: encryptionKey.substring(0, 8) + '...' // Log partial key for security
+      });
+
+      // Create vault on blockchain using smart contract
+      console.log('Calling contractUtils.createVault...');
+      console.log('Contract address:', CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY);
+      console.log('writeContract function:', typeof writeContract);
+      
+      // Test if writeContract is working
+      if (typeof writeContract !== 'function') {
+        throw new Error('writeContract is not a function');
+      }
+      
+      // Call writeContract directly to trigger MetaMask popup
+      console.log('About to call writeContract with args:', [vaultIdToUse, name, cypherIV, encryptionKey]);
+      
+      try {
+        const result = await writeContract({
+          address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+          abi: LIFESIGNAL_REGISTRY_ABI,
+          functionName: 'createVault',
+          args: [vaultIdToUse as `0x${string}`, name, cypherIV, encryptionKey],
+        });
+
+        console.log('Vault creation transaction result:', result);
+      } catch (error) {
+        console.error('Error calling createVault:', error);
+        
+        // Handle specific error types
+        let errorMessage = 'Failed to create vault. Please try again.';
+        
+        if (error instanceof Error) {
+          const errorStr = error.message.toLowerCase();
+          
+          if (errorStr.includes('owner not registered')) {
+            errorMessage = 'You must register as an owner first before creating vaults. Please complete your registration.';
+          } else if (errorStr.includes('user rejected') || errorStr.includes('user denied')) {
+            errorMessage = 'Transaction was cancelled by user.';
+          } else if (errorStr.includes('insufficient funds') || errorStr.includes('gas')) {
+            errorMessage = 'Insufficient funds for transaction. Please check your wallet balance.';
+          } else if (errorStr.includes('network') || errorStr.includes('connection')) {
+            errorMessage = 'Network connection error. Please check your internet connection and try again.';
+          } else if (errorStr.includes('contract') || errorStr.includes('execution')) {
+            errorMessage = 'Smart contract execution failed. The contract may not be deployed or there might be an issue with the blockchain.';
+          } else {
+            errorMessage = error.message;
+          }
+        }
+        
+        alert(errorMessage);
+        return;
+      }
+
+      // Call the original onSubmit for UI updates
+      onSubmit({ name, files, selectedContacts });
+      
+      // Reset form
+      setName('');
+      setVaultId('');
+      setFiles([]);
+      setSelectedContacts([]);
+      setStep('name');
+      onClose();
+    } catch (error) {
+      console.error('Error creating vault:', error);
+      // Show error to user
+      alert(`Error creating vault: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,7 +201,24 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
               />
             </div>
             
+            <div>
+              <label className="block text-white/80 text-sm font-medium mb-2">
+                Vault ID (Wallet Address)
+              </label>
+              <input
+                type="text"
+                value={vaultId}
+                onChange={(e) => setVaultId(e.target.value)}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                placeholder="0x... (optional, will use your wallet address if empty)"
+              />
+              <p className="text-white/40 text-xs mt-1">
+                Leave empty to use your wallet address as the vault ID
+              </p>
+            </div>
+            
             <div className="flex justify-end mt-6">
+              {/* Commented out original "Next: Add Files" button
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -99,6 +229,44 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
               >
                 Next: Add Files
               </motion.button>
+              */}
+              
+              <div className="flex gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  onClick={async () => {
+                    console.log('Testing writeContract...');
+                    try {
+                      await writeContract({
+                        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+                        abi: LIFESIGNAL_REGISTRY_ABI,
+                        functionName: 'sendHeartbeat',
+                        args: [],
+                      });
+                      console.log('sendHeartbeat test successful');
+                    } catch (error) {
+                      console.error('sendHeartbeat test failed:', error);
+                    }
+                  }}
+                  disabled={!isConnected || isCreating || isPending}
+                  className="px-4 py-2 bg-blue-600/90 hover:bg-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  Test Contract
+                </motion.button>
+                
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  onClick={(e) => handleSubmit(e)}
+                  disabled={!name.trim() || isCreating || isPending}
+                  className="px-6 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreating || isPending ? 'Creating Vault...' : 'Create Vault'}
+                </motion.button>
+              </div>
             </div>
           </div>
         );
@@ -229,10 +397,10 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
                   >
                     <div>
                       <div className="text-white font-medium">
-                        {contact.firstname} {contact.lastname}
+                        {contact.firstName} {contact.lastName}
                       </div>
                       <div className="text-white/60 text-sm font-mono">
-                        {contact.address.slice(0,6)}...{contact.address.slice(-4)}
+                        {contact.address ? `${contact.address.slice(0,6)}...${contact.address.slice(-4)}` : 'No address'}
                       </div>
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
@@ -264,9 +432,10 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 type="submit"
-                className="px-6 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+                disabled={isCreating || isPending}
+                className="px-6 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create Vault
+                {isCreating || isPending ? 'Creating Vault...' : 'Create Vault'}
               </motion.button>
             </div>
           </div>
@@ -293,6 +462,14 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
         </button>
 
         <h2 className="text-2xl font-semibold text-white mb-6">Create New Vault</h2>
+
+        {writeError && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+            <p className="text-red-400 text-sm">
+              Error: {writeError.message || 'Failed to create vault'}
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {renderStep()}

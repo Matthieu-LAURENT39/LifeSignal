@@ -5,7 +5,7 @@ import "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol";
 
 /**
  * @title LifeSignalRegistry
- * @dev Manages owner registration, contacts, and death declarations with privacy features
+ * @dev Manages owner registration, contacts, vaults, and death declarations with privacy features
  */
 contract LifeSignalRegistry {
     
@@ -21,11 +21,32 @@ contract LifeSignalRegistry {
         bool isDeceased;
         bool exists;
         address[] contactList;
+        address[] vaultList;
     }
 
     struct Contact {
         bool hasVotingRight;
         bool isVerified;
+        bool exists;
+    }
+
+    struct Vault {
+        address id; // vault address (wallet address)
+        string name;
+        address owner;
+        bool isReleased;
+        string cypherIv;
+        string encryptionKey;
+        bool exists;
+        address[] authorizedContacts;
+    }
+
+    struct VaultFile {
+        string id;
+        string originalName;
+        string mimeType;
+        string cid;
+        string uploadDate;
         bool exists;
     }
 
@@ -44,6 +65,8 @@ contract LifeSignalRegistry {
     // State variables
     mapping(address => Owner) private owners;
     mapping(address => mapping(address => Contact)) private contacts; // owner => contact => Contact
+    mapping(address => Vault) private vaults; // vault address => Vault
+    mapping(address => mapping(string => VaultFile)) private vaultFiles; // vault address => file id => VaultFile
     mapping(address => DeathDeclaration) private deathDeclarations;
     
     // Events
@@ -54,6 +77,10 @@ contract LifeSignalRegistry {
     event DeathDeclared(address indexed owner, address indexed declaredBy, uint256 timestamp);
     event VoteCast(address indexed owner, address indexed voter, bool vote);
     event ConsensusReached(address indexed owner, bool isDeceased, uint256 timestamp);
+    event VaultCreated(address indexed vaultId, address indexed owner, string name);
+    event VaultFileAdded(address indexed vaultId, string fileId, string originalName);
+    event VaultReleased(address indexed vaultId, address indexed owner);
+    event VaultContactAuthorized(address indexed vaultId, address indexed contact);
 
     // Modifiers
     modifier onlyRegistered() {
@@ -77,6 +104,29 @@ contract LifeSignalRegistry {
         require(contacts[owner][msg.sender].isVerified, "Contact not verified");
         require(contacts[owner][msg.sender].hasVotingRight, "No voting rights");
         _;
+    }
+
+    modifier onlyVaultOwner(address vaultId) {
+        require(vaults[vaultId].exists, "Vault does not exist");
+        require(vaults[vaultId].owner == msg.sender, "Not vault owner");
+        _;
+    }
+
+    modifier onlyVaultAuthorized(address vaultId) {
+        require(vaults[vaultId].exists, "Vault does not exist");
+        require(vaults[vaultId].owner == msg.sender || _isAuthorizedContact(vaultId, msg.sender), "Not authorized");
+        _;
+    }
+
+    // Internal helper function
+    function _isAuthorizedContact(address vaultId, address contact) internal view returns (bool) {
+        Vault storage vault = vaults[vaultId];
+        for (uint i = 0; i < vault.authorizedContacts.length; i++) {
+            if (vault.authorizedContacts[i] == contact) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -103,7 +153,8 @@ contract LifeSignalRegistry {
             graceInterval: _graceInterval,
             isDeceased: false,
             exists: true,
-            contactList: new address[](0)
+            contactList: new address[](0),
+            vaultList: new address[](0)
         });
 
         emit OwnerRegistered(msg.sender, _firstName, _lastName);
@@ -301,5 +352,147 @@ contract LifeSignalRegistry {
     function getVote(address _owner, address _voter) external view returns (bool) {
         require(deathDeclarations[_owner].hasVoted[_voter], "Voter has not voted");
         return deathDeclarations[_owner].vote[_voter];
+    }
+
+    // Vault Management Functions
+
+    /**
+     * @dev Create a new vault
+     */
+    function createVault(
+        address _vaultId,
+        string calldata _name,
+        string calldata _cypherIv,
+        string calldata _encryptionKey
+    ) external onlyRegistered {
+        require(!vaults[_vaultId].exists, "Vault already exists");
+        require(_vaultId != address(0), "Invalid vault address");
+
+        vaults[_vaultId] = Vault({
+            id: _vaultId,
+            name: _name,
+            owner: msg.sender,
+            isReleased: false,
+            cypherIv: _cypherIv,
+            encryptionKey: _encryptionKey,
+            exists: true,
+            authorizedContacts: new address[](0)
+        });
+
+        owners[msg.sender].vaultList.push(_vaultId);
+        emit VaultCreated(_vaultId, msg.sender, _name);
+    }
+
+    /**
+     * @dev Add a file to a vault
+     */
+    function addVaultFile(
+        address _vaultId,
+        string calldata _fileId,
+        string calldata _originalName,
+        string calldata _mimeType,
+        string calldata _cid,
+        string calldata _uploadDate
+    ) external onlyVaultOwner(_vaultId) {
+        require(!vaultFiles[_vaultId][_fileId].exists, "File already exists");
+
+        vaultFiles[_vaultId][_fileId] = VaultFile({
+            id: _fileId,
+            originalName: _originalName,
+            mimeType: _mimeType,
+            cid: _cid,
+            uploadDate: _uploadDate,
+            exists: true
+        });
+
+        emit VaultFileAdded(_vaultId, _fileId, _originalName);
+    }
+
+    /**
+     * @dev Authorize a contact to access a vault
+     */
+    function authorizeVaultContact(
+        address _vaultId,
+        address _contact
+    ) external onlyVaultOwner(_vaultId) {
+        require(contacts[msg.sender][_contact].exists, "Contact does not exist");
+        require(!_isAuthorizedContact(_vaultId, _contact), "Contact already authorized");
+
+        vaults[_vaultId].authorizedContacts.push(_contact);
+        emit VaultContactAuthorized(_vaultId, _contact);
+    }
+
+    /**
+     * @dev Release a vault (called when owner is deceased)
+     */
+    function releaseVault(address _vaultId) external onlyVaultAuthorized(_vaultId) {
+        require(!vaults[_vaultId].isReleased, "Vault already released");
+        require(owners[vaults[_vaultId].owner].isDeceased, "Owner not deceased");
+
+        vaults[_vaultId].isReleased = true;
+        emit VaultReleased(_vaultId, vaults[_vaultId].owner);
+    }
+
+    /**
+     * @dev Get vault information
+     */
+    function getVaultInfo(address _vaultId) external view returns (
+        string memory name,
+        address owner,
+        bool isReleased,
+        string memory cypherIv,
+        string memory encryptionKey,
+        bool exists
+    ) {
+        Vault storage vault = vaults[_vaultId];
+        return (
+            vault.name,
+            vault.owner,
+            vault.isReleased,
+            vault.cypherIv,
+            vault.encryptionKey,
+            vault.exists
+        );
+    }
+
+    /**
+     * @dev Get vault file information
+     */
+    function getVaultFileInfo(address _vaultId, string calldata _fileId) external view returns (
+        string memory originalName,
+        string memory mimeType,
+        string memory cid,
+        string memory uploadDate,
+        bool exists
+    ) {
+        VaultFile storage file = vaultFiles[_vaultId][_fileId];
+        return (
+            file.originalName,
+            file.mimeType,
+            file.cid,
+            file.uploadDate,
+            file.exists
+        );
+    }
+
+    /**
+     * @dev Get vault's authorized contacts
+     */
+    function getVaultAuthorizedContacts(address _vaultId) external view returns (address[] memory) {
+        return vaults[_vaultId].authorizedContacts;
+    }
+
+    /**
+     * @dev Get owner's vault list
+     */
+    function getOwnerVaultList(address _owner) external view returns (address[] memory) {
+        return owners[_owner].vaultList;
+    }
+
+    /**
+     * @dev Check if address is authorized for vault
+     */
+    function isVaultAuthorized(address _vaultId, address _address) external view returns (bool) {
+        return _isAuthorizedContact(_vaultId, _address);
     }
 } 
