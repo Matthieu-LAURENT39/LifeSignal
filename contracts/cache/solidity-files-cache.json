@@ -1,9 +1,47 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "/home/mathis/projects/web3/LifeSignal/contracts/contracts/LifeSignalRegistry.sol": {
-      "lastModificationDate": 1751730254886,
-      "contentHash": "f86d4192c33429591301ffa92c761357",
+    "C:\\Dossier Enora\\Dev\\Project\\Crypto\\LifeSignal\\contracts\\contracts\\automations\\GracePeriodAutomation.sol": {
+      "lastModificationDate": 1751740819221,
+      "contentHash": "46dbd9b0408990eafe13676c1dc986d6",
+      "sourceName": "contracts/automations/GracePeriodAutomation.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol",
+        "../LifeSignalRegistry.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "GracePeriodAutomation"
+      ]
+    },
+    "C:\\Dossier Enora\\Dev\\Project\\Crypto\\LifeSignal\\contracts\\contracts\\LifeSignalRegistry.sol": {
+      "lastModificationDate": 1751733688807,
+      "contentHash": "d001a1c6339574e42be9f024075e31c1",
       "sourceName": "contracts/LifeSignalRegistry.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -38,8 +76,46 @@
         "LifeSignalRegistry"
       ]
     },
-    "/home/mathis/projects/web3/LifeSignal/node_modules/@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol": {
-      "lastModificationDate": 1751730193920,
+    "C:\\Dossier Enora\\Dev\\Project\\Crypto\\LifeSignal\\node_modules\\@chainlink\\contracts\\src\\v0.8\\automation\\AutomationCompatible.sol": {
+      "lastModificationDate": 1751704792525,
+      "contentHash": "5e080eff2df83e7d1ec3b981fddeb1ce",
+      "sourceName": "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./AutomationBase.sol",
+        "./interfaces/AutomationCompatibleInterface.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "AutomationCompatible"
+      ]
+    },
+    "C:\\Dossier Enora\\Dev\\Project\\Crypto\\LifeSignal\\node_modules\\@oasisprotocol\\sapphire-contracts\\contracts\\Sapphire.sol": {
+      "lastModificationDate": 1751740665788,
       "contentHash": "6383174350ee5207867e05fb02436181",
       "sourceName": "@oasisprotocol/sapphire-contracts/contracts/Sapphire.sol",
       "solcConfig": {
@@ -71,6 +147,76 @@
       ],
       "artifacts": [
         "Sapphire"
+      ]
+    },
+    "C:\\Dossier Enora\\Dev\\Project\\Crypto\\LifeSignal\\node_modules\\@chainlink\\contracts\\src\\v0.8\\automation\\AutomationBase.sol": {
+      "lastModificationDate": 1751704792523,
+      "contentHash": "b53171d7e10f5036ecc73fac5d28028b",
+      "sourceName": "@chainlink/contracts/src/v0.8/automation/AutomationBase.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "AutomationBase"
+      ]
+    },
+    "C:\\Dossier Enora\\Dev\\Project\\Crypto\\LifeSignal\\node_modules\\@chainlink\\contracts\\src\\v0.8\\automation\\interfaces\\AutomationCompatibleInterface.sol": {
+      "lastModificationDate": 1751704792527,
+      "contentHash": "5cb8d69e4e9ed7ff601180e31372d0ca",
+      "sourceName": "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "AutomationCompatibleInterface"
       ]
     }
   }

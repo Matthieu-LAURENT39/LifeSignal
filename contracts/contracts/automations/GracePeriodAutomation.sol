@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.19;
 
 import "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
-import "../Owner.sol";
+import "../LifeSignalRegistry.sol";
 
 contract GracePeriodAutomation is AutomationCompatibleInterface {
-    Owner public ownerContract;
+    LifeSignalRegistry public registry;
     
     // Mapping to track grace period start times for each owner
     mapping(address => uint256) public gracePeriodStart;
@@ -21,17 +21,24 @@ contract GracePeriodAutomation is AutomationCompatibleInterface {
     event OwnerPinged(address indexed ownerAddress, uint256 pingTime);
     event GracePeriodProcessed(address indexed ownerAddress, bool isDead, uint256 processTime);
     
-    constructor(address _ownerContract) {
-        ownerContract = Owner(_ownerContract);
+    constructor(address _registry) {
+        registry = LifeSignalRegistry(_registry);
     }
     
     /**
-     * @dev Start grace period for an owner
+     * @dev Start grace period for an owner after death declaration consensus
      * @param ownerAddress The owner's address
      */
     function startGracePeriod(address ownerAddress) external {
-        require(ownerContract.ownerExists(ownerAddress), "Owner does not exist");
-        require(ownerContract.getOwnerStatus(ownerAddress) == Owner.OwnerStatus.GRACE_PERIOD, "Owner not in grace period");
+        // Check if owner exists in registry
+        (,,,, bool isDeceased, bool exists) = registry.getOwnerInfo(ownerAddress);
+        require(exists, "Owner does not exist in registry");
+        require(!isDeceased, "Owner is already deceased");
+        
+        // Check if there's an active death declaration with consensus reached
+        (bool isActive, , , , , bool consensusReached) = registry.getDeathDeclarationStatus(ownerAddress);
+        require(isActive && consensusReached, "No active death declaration with consensus");
+        
         require(gracePeriodStart[ownerAddress] == 0, "Grace period already started");
         
         gracePeriodStart[ownerAddress] = block.timestamp;
@@ -42,15 +49,22 @@ contract GracePeriodAutomation is AutomationCompatibleInterface {
     }
     
     /**
-     * @dev Allow owner to ping during grace period
+     * @dev Allow owner to ping during grace period (send heartbeat)
      * @param ownerAddress The owner's address
      */
     function ping(address ownerAddress) external {
         require(msg.sender == ownerAddress, "Only owner can ping");
-        require(ownerContract.ownerExists(ownerAddress), "Owner does not exist");
-        require(ownerContract.getOwnerStatus(ownerAddress) == Owner.OwnerStatus.GRACE_PERIOD, "Owner not in grace period");
+        
+        // Check if owner exists in registry
+        (,,,, bool isDeceased, bool exists) = registry.getOwnerInfo(ownerAddress);
+        require(exists, "Owner does not exist in registry");
+        require(!isDeceased, "Owner is already deceased");
+        
         require(gracePeriodStart[ownerAddress] > 0, "Grace period not started");
         require(!processedGracePeriod[ownerAddress], "Grace period already processed");
+        
+        // Send heartbeat through registry
+        registry.sendHeartbeat();
         
         hasPinged[ownerAddress] = true;
         
@@ -59,26 +73,20 @@ contract GracePeriodAutomation is AutomationCompatibleInterface {
     
     /**
      * @dev Check if upkeep is needed
-     * @param checkData Additional data for the check
+     * @param checkData Additional data for the check (owner address)
      * @return upkeepNeeded Whether upkeep is needed
      * @return performData Data to pass to performUpkeep
      */
     function checkUpkeep(bytes calldata checkData) external view override returns (bool upkeepNeeded, bytes memory performData) {
-        // Get all owners in grace period
-        // Note: In a real implementation, you might want to maintain a list of owners in grace period
-        // For this example, we'll check a specific owner address passed in checkData
         if (checkData.length == 0) {
             return (false, "");
         }
         
         address ownerAddress = abi.decode(checkData, (address));
         
-        // Check if owner exists and is in grace period
-        if (!ownerContract.ownerExists(ownerAddress)) {
-            return (false, "");
-        }
-        
-        if (ownerContract.getOwnerStatus(ownerAddress) != Owner.OwnerStatus.GRACE_PERIOD) {
+        // Check if owner exists in registry
+        (,,,, bool isDeceased, bool exists) = registry.getOwnerInfo(ownerAddress);
+        if (!exists || isDeceased) {
             return (false, "");
         }
         
@@ -93,8 +101,7 @@ contract GracePeriodAutomation is AutomationCompatibleInterface {
         }
         
         // Get owner's grace interval
-        Owner.OwnerData memory ownerData = ownerContract.getOwner(ownerAddress);
-        uint256 graceInterval = ownerData.graceInterval * 1 days; // Convert days to seconds
+        (,,, uint256 graceInterval,,) = registry.getOwnerInfo(ownerAddress);
         uint256 graceEndTime = gracePeriodStart[ownerAddress] + graceInterval;
         
         // Check if grace period has ended
@@ -107,20 +114,20 @@ contract GracePeriodAutomation is AutomationCompatibleInterface {
     
     /**
      * @dev Perform the upkeep
-     * @param performData Data from checkUpkeep
+     * @param performData Data from checkUpkeep (owner address)
      */
     function performUpkeep(bytes calldata performData) external override {
         address ownerAddress = abi.decode(performData, (address));
         
         // Verify conditions again
-        require(ownerContract.ownerExists(ownerAddress), "Owner does not exist");
-        require(ownerContract.getOwnerStatus(ownerAddress) == Owner.OwnerStatus.GRACE_PERIOD, "Owner not in grace period");
+        (,,,, bool isDeceased, bool exists) = registry.getOwnerInfo(ownerAddress);
+        require(exists, "Owner does not exist in registry");
+        require(!isDeceased, "Owner is already deceased");
         require(gracePeriodStart[ownerAddress] > 0, "Grace period not started");
         require(!processedGracePeriod[ownerAddress], "Grace period already processed");
         
         // Get owner's grace interval
-        Owner.OwnerData memory ownerData = ownerContract.getOwner(ownerAddress);
-        uint256 graceInterval = ownerData.graceInterval * 1 days; // Convert days to seconds
+        (,,, uint256 graceInterval,,) = registry.getOwnerInfo(ownerAddress);
         uint256 graceEndTime = gracePeriodStart[ownerAddress] + graceInterval;
         
         require(block.timestamp >= graceEndTime, "Grace period not yet over");
@@ -132,13 +139,46 @@ contract GracePeriodAutomation is AutomationCompatibleInterface {
         bool isDead = !hasPinged[ownerAddress];
         
         if (isDead) {
-            // Mark owner as dead
-            ownerContract.markAsDead(ownerAddress);
+            // Mark owner as deceased by initiating a death declaration
+            // Note: In a real scenario, you might want to have a special function in the registry
+            // to mark an owner as deceased after grace period timeout
+            // For now, we'll emit an event and the registry can be updated accordingly
+            emit GracePeriodProcessed(ownerAddress, true, block.timestamp);
         } else {
-            // Return owner to active status
-            ownerContract.updateOwnerStatus(ownerAddress, Owner.OwnerStatus.ACTIVE);
+            // Owner pinged, so they are alive
+            emit GracePeriodProcessed(ownerAddress, false, block.timestamp);
+        }
+    }
+    
+    
+    /**
+     * @dev Check if grace period has ended for an owner
+     * @param ownerAddress The owner's address
+     * @return hasEnded Whether grace period has ended
+     * @return endTime When grace period ends/will end
+     */
+    function checkGracePeriodEnd(address ownerAddress) external view returns (bool hasEnded, uint256 endTime) {
+        if (gracePeriodStart[ownerAddress] == 0) {
+            return (false, 0);
         }
         
-        emit GracePeriodProcessed(ownerAddress, isDead, block.timestamp);
+        (,,, uint256 graceInterval,,) = registry.getOwnerInfo(ownerAddress);
+        uint256 graceEndTime = gracePeriodStart[ownerAddress] + graceInterval;
+        
+        return (block.timestamp >= graceEndTime, graceEndTime);
+    }
+    
+    /**
+     * @dev Emergency function to mark owner as deceased after grace period timeout
+     * This function should only be called by authorized parties
+     * @param ownerAddress The owner's address
+     */
+    function markOwnerAsDeceased(address ownerAddress) external {
+        require(processedGracePeriod[ownerAddress], "Grace period not processed");
+        require(!hasPinged[ownerAddress], "Owner has pinged, cannot mark as deceased");
+        
+        // This would need to be implemented in the LifeSignalRegistry
+        // For now, we just emit an event
+        emit GracePeriodProcessed(ownerAddress, true, block.timestamp);
     }
 }

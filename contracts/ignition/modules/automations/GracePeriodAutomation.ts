@@ -2,11 +2,11 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
 export default buildModule("GracePeriodAutomationModule", (m) => {
-  // Deploy the Owner contract first
-  const ownerContract = m.contract("Owner", []);
+  // Deploy the LifeSignalRegistry contract first
+  const lifeSignalRegistry = m.contract("LifeSignalRegistry", []);
 
-  // Deploy the GracePeriodAutomation contract with Owner contract address
-  const gracePeriodAutomation = m.contract("GracePeriodAutomation", [ownerContract]);
+  // Deploy the GracePeriodAutomation contract with LifeSignalRegistry address
+  const gracePeriodAutomation = m.contract("GracePeriodAutomation", [lifeSignalRegistry]);
 
-  return { ownerContract, gracePeriodAutomation };
+  return { lifeSignalRegistry, gracePeriodAutomation };
 });
