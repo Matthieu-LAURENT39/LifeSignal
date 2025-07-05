@@ -708,6 +708,55 @@ export const LIFESIGNAL_REGISTRY_ABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_contact",
+        "type": "address"
+      }
+    ],
+    "name": "getContactVaultDetails",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "vaultIds",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "vaultNames",
+        "type": "string[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "vaultOwners",
+        "type": "address[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "isReleased",
+        "type": "bool[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "cypherIvs",
+        "type": "string[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "encryptionKeys",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256[][]",
+        "name": "fileIds",
+        "type": "uint256[][]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ] as const;
 
@@ -891,13 +940,23 @@ export const contractUtils = {
     });
   },
 
-  // Get vault information
+    // Get vault information
   getVaultInfo: async (readContract: any, vaultId: string) => {
     return readContract({
       address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'getVaultInfo',
       args: [vaultId],
+    });
+  },
+
+  // Get contact's vault details
+  getContactVaultDetails: async (readContract: any, contactAddress: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'getContactVaultDetails',
+      args: [contactAddress],
     });
   },
 

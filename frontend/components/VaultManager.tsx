@@ -848,33 +848,33 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
                           ))}
                         </div>
                       )}
-                    </div>
+                </div>
 
                     {/* Action buttons */}
-                    <div className="flex gap-4 pt-4">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        type="button"
+                <div className="flex gap-4 pt-4">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
                         onClick={() => {
                           setShowAuthorizeContact(false);
                           setContactsToAuthorize([]);
                         }}
-                        className="flex-1 px-6 py-3 bg-white/10 text-white font-medium rounded-xl border border-white/20 hover:bg-white/20"
-                      >
-                        Cancel
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        type="submit"
+                    className="flex-1 px-6 py-3 bg-white/10 text-white font-medium rounded-xl border border-white/20 hover:bg-white/20"
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="submit"
                         disabled={isPending || contactsToAuthorize.length === 0 || availableContactsForVault.length === 0}
-                        className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                         {isPending ? 'Authorizing...' : `Authorize ${contactsToAuthorize.length} Contact${contactsToAuthorize.length !== 1 ? 's' : ''}`}
-                      </motion.button>
-                    </div>
-                  </form>
+                  </motion.button>
+                </div>
+              </form>
                 );
               })()}
             </motion.div>

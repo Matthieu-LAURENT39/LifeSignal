@@ -57,6 +57,16 @@ contract LifeSignalRegistry {
         bool exists;
     }
 
+    struct ContactVaultDetails {
+        uint256 vaultId;
+        string vaultName;
+        address vaultOwner;
+        bool isReleased;
+        string cypherIv;
+        string encryptionKey;
+        uint256[] fileIds;
+    }
+
     struct DeathDeclaration {
         address initiator;
         uint256 startTime;
@@ -75,6 +85,7 @@ contract LifeSignalRegistry {
     mapping(uint256 => Vault) private vaults; // vault ID => Vault
     mapping(uint256 => mapping(uint256 => VaultFile)) private vaultFiles; // vault ID => file ID => VaultFile
     mapping(address => DeathDeclaration) private deathDeclarations;
+    mapping(address => ContactVaultDetails[]) private contactVaultDetails; // contact address => array of vault details
     uint256 private vaultCounter = 0; // Counter for generating unique vault IDs
     uint256 private fileCounter = 0; // Counter for generating unique file IDs
     
@@ -207,6 +218,18 @@ contract LifeSignalRegistry {
             
             vaults[vaultId].authorizedContacts.push(_contact);
             contacts[msg.sender][_contact].authorizedVaults.push(vaultId);
+            
+            // Add vault details to contact's vault details mapping
+            Vault storage vault = vaults[vaultId];
+            contactVaultDetails[_contact].push(ContactVaultDetails({
+                vaultId: vaultId,
+                vaultName: vault.name,
+                vaultOwner: vault.owner,
+                isReleased: vault.isReleased,
+                cypherIv: vault.cypherIv,
+                encryptionKey: vault.encryptionKey,
+                fileIds: vault.fileIds
+            }));
             
             emit VaultContactAuthorized(vaultId, _contact);
         }
@@ -536,6 +559,18 @@ contract LifeSignalRegistry {
         // Add vault to contact's authorized vaults list
         contacts[msg.sender][_contact].authorizedVaults.push(_vaultId);
         
+        // Add vault details to contact's vault details mapping
+        Vault storage vault = vaults[_vaultId];
+        contactVaultDetails[_contact].push(ContactVaultDetails({
+            vaultId: _vaultId,
+            vaultName: vault.name,
+            vaultOwner: vault.owner,
+            isReleased: vault.isReleased,
+            cypherIv: vault.cypherIv,
+            encryptionKey: vault.encryptionKey,
+            fileIds: vault.fileIds
+        }));
+        
         emit VaultContactAuthorized(_vaultId, _contact);
     }
 
@@ -664,5 +699,40 @@ contract LifeSignalRegistry {
      */
     function getVaultFileList(uint256 _vaultId) external view returns (uint256[] memory) {
         return vaults[_vaultId].fileIds;
+    }
+
+    /**
+     * @dev Get contact's vault details
+     */
+    function getContactVaultDetails(address _contact) external view returns (
+        uint256[] memory vaultIds,
+        string[] memory vaultNames,
+        address[] memory vaultOwners,
+        bool[] memory isReleased,
+        string[] memory cypherIvs,
+        string[] memory encryptionKeys,
+        uint256[][] memory fileIds
+    ) {
+        ContactVaultDetails[] storage details = contactVaultDetails[_contact];
+        uint256 length = details.length;
+        
+        vaultIds = new uint256[](length);
+        vaultNames = new string[](length);
+        vaultOwners = new address[](length);
+        isReleased = new bool[](length);
+        cypherIvs = new string[](length);
+        encryptionKeys = new string[](length);
+        fileIds = new uint256[][](length);
+        
+        for (uint256 i = 0; i < length; i++) {
+            ContactVaultDetails storage detail = details[i];
+            vaultIds[i] = detail.vaultId;
+            vaultNames[i] = detail.vaultName;
+            vaultOwners[i] = detail.vaultOwner;
+            isReleased[i] = detail.isReleased;
+            cypherIvs[i] = detail.cypherIv;
+            encryptionKeys[i] = detail.encryptionKey;
+            fileIds[i] = detail.fileIds;
+        }
     }
 } 

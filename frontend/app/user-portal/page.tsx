@@ -157,13 +157,16 @@ export default function UserPortal() {
 
   // Clear newly created contacts when blockchain data refreshes to prevent duplicates
   useEffect(() => {
-    if (contactListDetails && Array.isArray(contactListDetails) && contactListDetails.length >= 7) {
-      const contactAddresses = contactListDetails[0] as string[];
-      if (contactAddresses && contactAddresses.length > 0) {
-        // Clear newly created contacts that are now in the blockchain data
-        setNewlyCreatedContacts(prev => 
-          prev.filter(contact => !contactAddresses.includes(contact.address))
-        );
+    if (contactListDetails && Array.isArray(contactListDetails)) {
+      const details = contactListDetails as any[];
+      if (details.length >= 7) {
+        const contactAddresses = details[0] as string[];
+        if (contactAddresses && contactAddresses.length > 0) {
+          // Clear newly created contacts that are now in the blockchain data
+          setNewlyCreatedContacts(prev => 
+            prev.filter(contact => contact.address && !contactAddresses.includes(contact.address))
+          );
+        }
       }
     }
   }, [contactListDetails]);
