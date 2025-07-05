@@ -4,7 +4,7 @@
 
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
-const LifeSignalModule = buildModule("LifeSignalModule", (m) => {
+const RegularLifeSignalModule = buildModule("LifeSignalModule", (m) => {
   const interval = m.getParameter("interval", 240);
   const timeout = m.getParameter("timeout", 240);
 
@@ -13,4 +13,4 @@ const LifeSignalModule = buildModule("LifeSignalModule", (m) => {
   return { lifeSignal };
 });
 
-export default LifeSignalModule;
+export default RegularLifeSignalModule;
