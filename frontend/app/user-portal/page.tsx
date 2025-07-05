@@ -5,58 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-
-interface VaultFile {
-  id: string;
-  originalName: string;
-  mimeType: string;
-  cid: string;
-  uploadDate: string;
-}
-
-interface Vault {
-  id: string;
-  name: string;
-  owner: string;
-  files: VaultFile[];
-  contacts: Contact[];
-  isReleased: boolean;
-  cypher: {
-    iv: string;
-    encryptionKey: string;
-  };
-}
-
-interface Contact {
-  id: string;
-  address: string;
-  firstName: string;
-  lastName: string;
-  birthDate?: string;
-  email?: string;
-  hasVotingRight: boolean;
-  isIdVerified: boolean;
-  vaults: Vault[];
-  user: User;
-}
-
-interface User {
-    id: string;
-    address: string;
-    name: string;
-    email?: string;
-    status: 'active' | 'voting_in_progress' | 'grace_period' | 'dead';
-    graceInterval: number; // in days (30 days for death declaration)
-    deathDeclaration: {
-        declaredBy: string;
-        declaredAt: string;
-        votes: { contactId: string; voted: boolean; votedAt: string }[];
-        consensusReached: boolean;
-        consensusReachedAt?: string;
-    } | null;
-    vaults: Vault[];
-    contacts: Contact[];
-  }
+import type { Vault, VaultFile, Contact, User } from '../../types/models';
 
 const buildMockData = (ownerAddr: string): User => {
   // files
@@ -172,10 +121,6 @@ export default function UserPortal() {
   const activeVaults = currentUser?.vaults.filter(v => !v.isReleased).length ?? 0;
   const totalFiles = currentUser?.vaults.reduce((n, v) => n + v.files.length, 0) ?? 0;
   const totalHeirsCount = currentUser?.contacts.length ?? 0;
-  const vaultsInDanger = 0;
-
-  // Get recent vaults (last 3)
-  const recentVaults = currentUser?.vaults.slice(0, 3) ?? [];
 
   const getVaultIcon = (vaultName: string) => {
     if (vaultName.toLowerCase().includes('family')) return '🏦';
@@ -189,15 +134,6 @@ export default function UserPortal() {
       'from-emerald-500 to-teal-500',
       'from-teal-500 to-cyan-500',
       'from-cyan-500 to-blue-500'
-    ];
-    return colors[index % colors.length];
-  };
-
-  const getVaultButtonColor = (index: number) => {
-    const colors = [
-      'bg-emerald-600/20 text-emerald-400 border-emerald-500/30',
-      'bg-teal-600/20 text-teal-400 border-teal-500/30',
-      'bg-cyan-600/20 text-cyan-400 border-cyan-500/30'
     ];
     return colors[index % colors.length];
   };
