@@ -1,18 +1,8 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import "@oasisprotocol/sapphire-hardhat";
 import * as dotenv from "dotenv";
 
-// Load environment variables from .env file in root path
-dotenv.config({ path: "../.env" });
-
-const accounts = process.env.SAPPHIRE_PRIVATE_KEY ? [process.env.SAPPHIRE_PRIVATE_KEY] : {
-  mnemonic: "test test test test test test test test test test test junk",
-  path: "m/44'/60'/0'/0",
-  initialIndex: 0,
-  count: 20,
-  passphrase: "",
-};
+dotenv.config();
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -26,17 +16,17 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
-    "sapphire": {
-      url: process.env.SAPPHIRE_RPC_URL || "https://sapphire.oasis.io",
-      chainId: 0x5afe,
-      accounts,
+    oasisSapphireTestnet: {
+      url: "https://testnet.sapphire.oasis.dev",
+      chainId: 23295,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
-    "sapphire-testnet": {
-      url: process.env.SAPPHIRE_TESTNET_RPC_URL || "https://testnet.sapphire.oasis.io",
-      accounts,
-      chainId: 0x5aff,
+    sepolia:{
+      url: `https://sepolia.infura.io/v3/${process.env.INFURA_API_KEY}`,
+      chainId: 11155111,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     }
-  }
+  },
 };
 
 export default config;
