@@ -1,0 +1,41 @@
+{
+  "name": "lifesignal-relay",
+  "version": "1.0.0",
+  "description": "Off-chain relay server bridging Sepolia Chainlink automation with Oasis Sapphire LifeSignalRegistry",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
+  },
+  "keywords": [
+    "blockchain",
+    "relay",
+    "bridge",
+    "chainlink",
+    "oasis",
+    "sapphire",
+    "ethereum",
+    "sepolia"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.8.1",
+    "@oasisprotocol/sapphire-paratime": "^2.2.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "winston": "^3.11.0",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "eslint": "^8.55.0",
+    "@types/node": "^20.10.5"
+  }
+} 

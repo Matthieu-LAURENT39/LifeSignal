@@ -1,0 +1,14 @@
+{"contractAddress":"0xB9DA6b9F657a4931dfF1BCC875283eAC292995Ba","level":"info","message":"Ethereum interface initialized","network":"Sepolia","relayAddress":"0xD448E18287ED6b6D5fa6f5Fe367BB85B93B1058a","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:30"}
+{"contractAddress":"0xc527fEd9885557f6ea43dBaDACe574897eB7F339","level":"info","message":"Sapphire interface initialized","network":"Oasis Sapphire Testnet","relayAddress":"0xD448E18287ED6b6D5fa6f5Fe367BB85B93B1058a","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:30"}
+{"level":"info","message":"Starting relay service...","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:30"}
+{"host":"localhost","level":"info","message":"Relay server started","port":3000,"service":"lifesignal-relay","timestamp":"2025-07-05 22:30:30"}
+{"blockNumber":8700038,"chainId":"11155111","level":"info","message":"Sepolia connection established","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:31"}
+{"blockNumber":12440040,"chainId":"23295","level":"info","message":"Sapphire connection established","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:31"}
+{"level":"info","message":"Starting to listen to Sapphire events","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:31"}
+{"level":"info","message":"Starting to listen to Sepolia events","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:31"}
+{"level":"info","message":"Event listeners started","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:31"}
+{"level":"info","message":"Periodic tasks started","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:31"}
+{"level":"info","message":"Relay service started successfully","service":"lifesignal-relay","timestamp":"2025-07-05 22:30:31"}
+{"ip":"::1","level":"info","message":"GET /health","service":"lifesignal-relay","timestamp":"2025-07-05 22:31:36","userAgent":"curl/8.13.0"}
+{"ip":"::1","level":"info","message":"GET /status","service":"lifesignal-relay","timestamp":"2025-07-05 22:31:41","userAgent":"curl/8.13.0"}
+{"ip":"::1","level":"info","message":"GET /status","service":"lifesignal-relay","timestamp":"2025-07-05 22:32:07","userAgent":"node"}
