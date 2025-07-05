@@ -3,10 +3,10 @@ import "@nomicfoundation/hardhat-toolbox";
 import "@oasisprotocol/sapphire-hardhat";
 import * as dotenv from "dotenv";
 
-// Load environment variables from .env
-dotenv.config();
+// Load environment variables from .env file in root path
+dotenv.config({ path: "../.env" });
 
-const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : {
+const accounts = process.env.SAPPHIRE_PRIVATE_KEY ? [process.env.SAPPHIRE_PRIVATE_KEY] : {
   mnemonic: "test test test test test test test test test test test junk",
   path: "m/44'/60'/0'/0",
   initialIndex: 0,
@@ -17,13 +17,13 @@ const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : {
 const config: HardhatUserConfig = {
   solidity: "0.8.28",
   networks: {
-    sapphire: {
-      url: "https://sapphire.oasis.io",
+    "sapphire": {
+      url: process.env.SAPPHIRE_RPC_URL || "https://sapphire.oasis.io",
       chainId: 0x5afe,
       accounts,
     },
     "sapphire-testnet": {
-      url: "https://testnet.sapphire.oasis.io",
+      url: process.env.SAPPHIRE_TESTNET_RPC_URL || "https://testnet.sapphire.oasis.io",
       accounts,
       chainId: 0x5aff,
     }
