@@ -12,9 +12,11 @@
     "node": "hardhat node"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.13",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@oasisprotocol/sapphire-hardhat": "^2.0.0",
-    "hardhat": "^2.19.0"
+    "hardhat": "^2.19.0",
+    "dotenv": "^16.3.1"
   },
   "dependencies": {
     "@oasisprotocol/sapphire-contracts": "^0.2.0",
@@ -29,4 +31,4 @@
   ],
   "author": "",
   "license": "MIT"
-} 
+}

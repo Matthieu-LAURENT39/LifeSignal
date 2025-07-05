@@ -13,6 +13,7 @@
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:backend": "npm run dev --workspace=backend",
     "dev:contracts": "npm run dev --workspace=contracts",
+    "deploy:contract": "cd contracts && npx hardhat ignition deploy ignition/modules/LifeSignalRegistry.ts --network 'sapphire-testnet'",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",

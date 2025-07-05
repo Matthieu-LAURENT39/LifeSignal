@@ -1,5 +1,8 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("@oasisprotocol/sapphire-hardhat");
+require("@nomicfoundation/hardhat-ignition-ethers");
+
+require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {

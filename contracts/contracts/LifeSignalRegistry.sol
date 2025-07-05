@@ -220,7 +220,7 @@ contract LifeSignalRegistry {
      */
     function _checkConsensus(address _owner) internal {
         DeathDeclaration storage declaration = deathDeclarations[_owner];
-        uint256 totalVotes = declaration.votesFor + declaration.votesAgainst;
+        // uint256 totalVotes = declaration.votesFor + declaration.votesAgainst;
         uint256 requiredVotes = (declaration.totalVotingContacts * 50) / 100 + 1; // Majority
 
         if (declaration.votesFor >= requiredVotes) {
