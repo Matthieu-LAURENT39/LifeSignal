@@ -42,14 +42,14 @@ export default function Home() {
             Connect your wallet to get started with creating your inheritance vault
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-4 mt-8 justify-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
             <Link href="/vault">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 bg-gradient-to-r from-emerald-600/80 to-teal-600/80 hover:from-emerald-500/90 hover:to-teal-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-emerald-500/25"
+                className="w-full px-6 py-4 bg-gradient-to-r from-emerald-600/80 to-teal-600/80 hover:from-emerald-500/90 hover:to-teal-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-emerald-500/25"
               >
-                🔒 Create Your Vault
+                🔒 Create Vault
               </motion.button>
             </Link>
             
@@ -57,9 +57,19 @@ export default function Home() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-500/90 hover:to-purple-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-indigo-500/25"
+                className="w-full px-6 py-4 bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-500/90 hover:to-purple-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-indigo-500/25"
               >
-                📊 Vault Dashboard
+                📊 Dashboard
+              </motion.button>
+            </Link>
+            
+            <Link href="/heir-decrypt">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-full px-6 py-4 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500/90 hover:to-pink-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-purple-500/25"
+              >
+                🔑 Heir Access
               </motion.button>
             </Link>
             
@@ -67,9 +77,9 @@ export default function Home() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500/90 hover:to-pink-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-purple-500/25"
+                className="w-full px-6 py-4 bg-gradient-to-r from-orange-600/80 to-red-600/80 hover:from-orange-500/90 hover:to-red-500/90 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 transition-all duration-300 shadow-lg hover:shadow-orange-500/25"
               >
-                🧪 Test Encryption
+                🧪 Test Lab
               </motion.button>
             </Link>
           </div>
