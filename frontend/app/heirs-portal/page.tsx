@@ -3,8 +3,10 @@
 import { WalletConnectButton } from '../../components/WalletConnectButton';
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { useReadContract } from 'wagmi';
 import type { Owner } from '../../types/models';
 import { useRouter } from 'next/navigation';
+import { CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../../lib/contracts';
 
 // Mock data for testing
 const mockOwnerData: { [key: string]: Owner } = {
@@ -60,6 +62,18 @@ export default function HeirsPortal() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const router = useRouter();
 
+  // Get contact vault details from blockchain
+  const { data: contactVaultDetails, error: vaultDetailsError, isLoading: vaultDetailsLoading } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFESIGNAL_REGISTRY_ABI,
+    functionName: 'getContactVaultDetails',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && isConnected,
+      refetchInterval: 5000, // Refetch every 5 seconds
+    }
+  });
+
   useEffect(() => {
     if (!isConnected) {
       router.push('/');
@@ -71,17 +85,50 @@ export default function HeirsPortal() {
 
       setIsLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const heirData = mockContactData[address];
-        if (!heirData) {
-          throw new Error('Not authorized as heir');
+        // Check if user has access to any vaults from real contract data
+        if (contactVaultDetails && Array.isArray(contactVaultDetails) && contactVaultDetails.length >= 7) {
+          const vaultIds = contactVaultDetails[0] as readonly bigint[];
+          if (vaultIds && vaultIds.length > 0) {
+            // User has access to vaults - this is a real heir
+            setOwnerInfo({
+              id: 'real-heir',
+              firstName: 'Vault',
+              lastName: 'Contact',
+              address: address,
+              status: 'active',
+              graceInterval: 30,
+              isIdVerified: true,
+              hasVotingRight: true,
+              deathDeclaration: null,
+            });
+            setHasVotingRight(true);
+            setError(null);
+          } else {
+            // No vaults found but user is still a contact
+            setOwnerInfo({
+              id: 'contact-no-vaults',
+              firstName: 'Contact',
+              lastName: 'User',
+              address: address,
+              status: 'active',
+              graceInterval: 30,
+              isIdVerified: true,
+              hasVotingRight: false,
+              deathDeclaration: null,
+            });
+            setHasVotingRight(false);
+            setError(null);
+          }
+        } else if (vaultDetailsError) {
+          // Contract error - user might not be a contact at all
+          throw new Error(`Contract error: ${vaultDetailsError.message}`);
+        } else if (!vaultDetailsLoading && !contactVaultDetails) {
+          // No data returned - user is not a contact
+          throw new Error('No vault access found - you are not authorized as a contact for any vaults');
+        } else {
+          // Still loading or no data yet
+          return;
         }
-
-        setOwnerInfo(heirData.owner);
-        setHasVotingRight(heirData.hasVotingRight);
-        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
         setOwnerInfo(null);
@@ -91,7 +138,7 @@ export default function HeirsPortal() {
     };
 
     fetchHeirInfo();
-  }, [address, isConnected, router]);
+  }, [address, isConnected, router, contactVaultDetails, vaultDetailsError, vaultDetailsLoading]);
 
   const handleDeclareDeceased = async () => {
     if (!ownerInfo || !address) return;
@@ -196,87 +243,240 @@ export default function HeirsPortal() {
           </h1>
         </div>
 
-        <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 p-8">
-          {/* Owner Info */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Vault Owner</h2>
-            <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-white">
-                  {ownerInfo.firstName} {ownerInfo.lastName}
-                </div>
-                <div className={`px-3 py-1 rounded-full text-sm ${
-                  ownerInfo.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
-                  ownerInfo.status === 'voting_in_progress' ? 'bg-yellow-500/20 text-yellow-400' :
-                  ownerInfo.status === 'grace_period' ? 'bg-orange-500/20 text-orange-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>
-                  {ownerInfo.status === 'active' ? 'Active' :
-                   ownerInfo.status === 'voting_in_progress' ? 'Voting in Progress' :
-                   ownerInfo.status === 'grace_period' ? 'Grace Period' :
-                   'Deceased'}
-                </div>
-              </div>
-              <div className="text-white/60 text-sm font-mono">
-                {ownerInfo.address}
-              </div>
-            </div>
-          </div>
 
-          {/* Death Declaration Section */}
-          {hasVotingRight && ownerInfo.status === 'active' && (
-            <div className="border-t border-white/10 pt-6">
-              <h3 className="text-lg font-medium text-white mb-4">Death Declaration</h3>
-              <p className="text-white/70 text-sm mb-4">
-                As a trusted contact with voting rights, you can initiate a death declaration process if you believe the owner has passed away.
-              </p>
-              <button
-                onClick={() => setShowConfirmation(true)}
-                disabled={isVoting}
-                className="w-full py-3 px-4 rounded-xl font-medium transition-colors bg-red-500 hover:bg-red-600 text-white disabled:bg-red-500/50 disabled:text-white/50 disabled:cursor-not-allowed"
-              >
-                Declare Owner as Deceased
-              </button>
-            </div>
-          )}
 
-          {/* Voting Status */}
-          {ownerInfo.status === 'voting_in_progress' && ownerInfo.deathDeclaration && (
-            <div className="border-t border-white/10 pt-6">
-              <h3 className="text-lg font-medium text-white mb-4">Death Declaration Status</h3>
-              <div className="space-y-4">
-                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-                  <div className="text-sm text-white/70 mb-3">
-                    A death declaration process has been initiated.
-                  </div>
-                  <div className="text-sm text-white/70">
-                    Date: <span className="text-white">{new Date(ownerInfo.deathDeclaration.declaredAt).toLocaleString()}</span>
-                  </div>
-                  <div className="mt-4">
-                    <div className="text-sm font-medium text-white/70 mb-2">Voting Progress:</div>
-                    <div className="bg-white/5 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-white/70">Required Consensus</span>
-                        <span className="text-white font-medium">50%</span>
-                      </div>
-                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-yellow-500 to-red-500 rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${(ownerInfo.deathDeclaration.votes.filter(v => v.voted).length / ownerInfo.deathDeclaration.votes.length) * 100}%` 
-                          }}
-                        />
-                      </div>
-                      <p className="text-white/60 text-xs mt-2 text-center">
-                        Voting in progress. The outcome will be determined when consensus is reached.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        {/* Owners Table - Where user is a contact */}
+        <div className="mt-8 backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 p-8">
+          <h3 className="text-xl font-semibold text-white mb-6">Owners Where You Are a Contact</h3>
+          
+          {vaultDetailsLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+              <p className="text-white/70 mt-2">Loading owner information...</p>
+            </div>
+          ) : vaultDetailsError ? (
+            <div className="text-center py-8">
+              <p className="text-red-400">Error loading owner information: {vaultDetailsError.message}</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs uppercase bg-white/5">
+                  <tr>
+                    <th className="px-6 py-3 text-white/70">Owner Address</th>
+                    <th className="px-6 py-3 text-white/70">Status</th>
+                    <th className="px-6 py-3 text-white/70">Voting Rights</th>
+                    <th className="px-6 py-3 text-white/70">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {(() => {
+                    // Check if we have valid vault data to extract owner information
+                    if (!contactVaultDetails || !Array.isArray(contactVaultDetails) || contactVaultDetails.length < 7) {
+                      return (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-8 text-center text-white/70">
+                            <div className="flex flex-col items-center space-y-2">
+                              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+                                <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                                </svg>
+                              </div>
+                              <p className="text-white/70 font-medium">No Owner Access</p>
+                              <p className="text-white/50 text-sm">You are not a contact for any owners</p>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    const vaultOwners = contactVaultDetails[2] as readonly `0x${string}`[];
+                    
+                    if (!vaultOwners || vaultOwners.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-8 text-center text-white/70">
+                            <div className="flex flex-col items-center space-y-2">
+                              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+                                <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                                </svg>
+                              </div>
+                              <p className="text-white/70 font-medium">No Owners Found</p>
+                              <p className="text-white/50 text-sm">No owner information available</p>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // Get unique owners
+                    const uniqueOwners = [...new Set(vaultOwners)];
+                    
+                    return uniqueOwners.map((ownerAddress, index) => (
+                      <tr key={ownerAddress} className="hover:bg-white/5">
+                        <td className="px-6 py-4 text-white/70 font-mono text-sm">
+                          {ownerAddress.slice(0, 6)}...{ownerAddress.slice(-4)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400">
+                            Active
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400">
+                            Yes
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => {
+                              // For now, we'll use a simple alert. In a real implementation,
+                              // you'd want to fetch owner details and show a proper modal
+                              alert(`Death declaration for ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
+                            }}
+                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors"
+                          >
+                            Declare Death
+                          </button>
+                        </td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
+
+        {/* Vault Access Table */}
+        <div className="mt-8 backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 p-8">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-semibold text-white">Vault Access</h3>
+            {contactVaultDetails && Array.isArray(contactVaultDetails) && contactVaultDetails.length >= 7 && (
+              <div className="text-sm text-white/70">
+                {(() => {
+                  const vaultIds = contactVaultDetails[0] as readonly bigint[];
+                  return `${vaultIds?.length || 0} vault${vaultIds?.length !== 1 ? 's' : ''}`;
+                })()}
+              </div>
+            )}
+          </div>
+          
+          {vaultDetailsLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+              <p className="text-white/70 mt-2">Loading vault details from blockchain...</p>
+            </div>
+          ) : vaultDetailsError ? (
+            <div className="text-center py-8">
+              <p className="text-red-400">Error loading vault details: {vaultDetailsError.message}</p>
+              <details className="mt-4 text-left">
+                <summary className="text-white/50 cursor-pointer text-xs">Debug Info</summary>
+                <pre className="mt-2 text-xs text-white/50 bg-black/20 p-2 rounded overflow-auto">
+                  {JSON.stringify({ 
+                    error: vaultDetailsError?.message || vaultDetailsError, 
+                    address, 
+                    isConnected,
+                    contractAddress: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY
+                  }, null, 2)}
+                </pre>
+              </details>
+            </div>
+          ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs uppercase bg-white/5">
+                    <tr>
+                      <th className="px-6 py-3 text-white/70">Vault Name</th>
+                      <th className="px-6 py-3 text-white/70">Owner</th>
+                      <th className="px-6 py-3 text-white/70">Status</th>
+                      <th className="px-6 py-3 text-white/70">Files</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {(() => {
+                      // Check if we have valid vault data
+                      if (!contactVaultDetails || !Array.isArray(contactVaultDetails) || contactVaultDetails.length < 7) {
+                        return (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-8 text-center text-white/70">
+                              <div className="flex flex-col items-center space-y-2">
+                                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                  </svg>
+                                </div>
+                                <p className="text-white/70 font-medium">No Vault Access</p>
+                                <p className="text-white/50 text-sm">You are not authorized as a contact for any vaults</p>
+                                <details className="mt-4 text-left">
+                                  <summary className="text-white/50 cursor-pointer text-xs">Debug Info</summary>
+                                  <pre className="mt-2 text-xs text-white/50 bg-black/20 p-2 rounded overflow-auto max-w-xs">
+                                    {(() => {
+                                      if (!contactVaultDetails) return 'No data';
+                                      if (!Array.isArray(contactVaultDetails)) return 'Not an array';
+                                      return `Array with ${contactVaultDetails.length} items`;
+                                    })()}
+                                  </pre>
+                                </details>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      const vaultIds = contactVaultDetails[0] as readonly bigint[];
+                      const vaultNames = contactVaultDetails[1] as readonly string[];
+                      const vaultOwners = contactVaultDetails[2] as readonly `0x${string}`[];
+                      const isReleased = contactVaultDetails[3] as readonly boolean[];
+                      const fileIds = contactVaultDetails[6] as readonly (readonly bigint[])[];
+
+                      if (!vaultIds || vaultIds.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-8 text-center text-white/70">
+                              <div className="flex flex-col items-center space-y-2">
+                                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                  </svg>
+                                </div>
+                                <p className="text-white/70 font-medium">No Vaults Found</p>
+                                <p className="text-white/50 text-sm">You may not have been authorized for any vaults yet</p>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return vaultIds.map((vaultId, index) => (
+                        <tr key={Number(vaultId)} className="hover:bg-white/5">
+                          <td className="px-6 py-4 text-white">
+                            {vaultNames[index] || `Vault ${Number(vaultId)}`}
+                          </td>
+                          <td className="px-6 py-4 text-white/70 font-mono text-xs">
+                            {vaultOwners[index] ? `${vaultOwners[index].slice(0, 6)}...${vaultOwners[index].slice(-4)}` : 'Unknown'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              isReleased[index] 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {isReleased[index] ? 'Released' : 'Locked'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-white">
+                            {fileIds[index] ? fileIds[index].length : 0} files
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
       </div>
 
       {/* Confirmation Modal */}
