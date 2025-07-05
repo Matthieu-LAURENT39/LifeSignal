@@ -29,6 +29,10 @@ module.exports = {
       chainId: 0x5afe,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
+    "sepolia": {
+      url: "https://sepolia.infura.io/v3/${INFURA_API_KEY}",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+    },
   },
   etherscan: {
     apiKey: {

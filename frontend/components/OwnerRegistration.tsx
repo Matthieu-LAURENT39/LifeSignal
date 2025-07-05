@@ -55,7 +55,7 @@ export default function OwnerRegistration({ onRegistrationComplete, onCancel }: 
     setError(null);
 
     try {
-      console.log('Registering owner with encrypted data...');
+      console.log('Registering owner with data...');
       
       // Use the contract utility to register owner
       const hash = await contractUtils.registerOwner(
@@ -87,8 +87,10 @@ export default function OwnerRegistration({ onRegistrationComplete, onCancel }: 
           errorMessage = 'Network connection error. Please check your internet connection and try again.';
         } else if (errorStr.includes('contract') || errorStr.includes('execution')) {
           errorMessage = 'Smart contract execution failed. The contract may not be deployed or there might be an issue with the blockchain.';
-        } else if (errorStr.includes('encryption') || errorStr.includes('encrypt')) {
-          errorMessage = 'Data encryption failed. Please try again.';
+        } else if (errorStr.includes('owner already registered')) {
+          errorMessage = 'You are already registered as an owner.';
+        } else if (errorStr.includes('grace interval')) {
+          errorMessage = 'Grace interval must be between 1 and 365 days.';
         } else {
           errorMessage = err.message;
         }

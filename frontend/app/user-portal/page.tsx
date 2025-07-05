@@ -109,9 +109,13 @@ const buildMockData = (ownerAddr: string): Owner => {
 
 export default function UserPortal() {
   const { address, isConnected } = useAccount();
-  const { data: ownerInfo, error: ownerError, isLoading: ownerLoading } = useLifeSignalRegistryRead('getOwnerInfo', address ? [address] : undefined, {
-    enabled: !!address && isConnected,
-  });
+  const { data: ownerInfo, error: ownerError, isLoading: ownerLoading } = useLifeSignalRegistryRead(
+    'getOwnerInfo', 
+    address ? [address] : undefined, 
+    {
+      enabled: !!address && isConnected,
+    }
+  );
   
   const { writeContract, isPending } = useLifeSignalRegistryWrite();
   const [currentUser, setCurrentUser] = useState<Owner | null>(null);
@@ -147,7 +151,8 @@ export default function UserPortal() {
     }
 
     if (ownerInfo) {
-      const [firstName, lastName, lastHeartbeat, graceInterval, isDeceased, exists] = ownerInfo;
+      // ownerInfo is an array with [firstName, lastName, lastHeartbeat, graceInterval, isDeceased, exists]
+      const [firstName, lastName, lastHeartbeat, graceInterval, isDeceased, exists] = ownerInfo as [string, string, bigint, bigint, boolean, boolean];
       
       console.log('Owner info from contract:', { firstName, lastName, exists, isDeceased, lastHeartbeat, graceInterval });
       

@@ -504,10 +504,17 @@ export const CONTRACT_ADDRESSES = {
 } as const;
 
 // Hook to use contract read functions
-export function useLifeSignalRegistryRead() {
+export function useLifeSignalRegistryRead(
+  functionName: string,
+  args?: readonly unknown[],
+  options?: { enabled?: boolean }
+) {
   return useReadContract({
     address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
     abi: LIFESIGNAL_REGISTRY_ABI,
+    functionName: functionName as any,
+    args: args as any,
+    ...options,
   });
 }
 
@@ -558,10 +565,7 @@ export const contractUtils = {
   // Add a new contact
   addContact: async (
     writeContract: any,
-    firstName: string,
-    lastName: string,
-    email: string,
-    phone: string,
+    contactAddress: string,
     hasVotingRight: boolean
   ) => {
     return writeContract({
@@ -569,10 +573,7 @@ export const contractUtils = {
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'addContact',
       args: [
-        firstName,
-        lastName,
-        email,
-        phone,
+        contactAddress,
         hasVotingRight
       ],
     });
