@@ -1,0 +1,13 @@
+{"contractAddress":"0xFECf926B08dff28b646549378265F40C3e47ffF1","level":"info","message":"Ethereum interface initialized","network":"Sepolia","relayAddress":"0xD448E18287ED6b6D5fa6f5Fe367BB85B93B1058a","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:05"}
+{"contractAddress":"0xe8aa5Fa5E2FCAAaC6Dc00C477E13972e6Adb5174","level":"info","message":"Sapphire interface initialized","network":"Oasis Sapphire Testnet","relayAddress":"0xD448E18287ED6b6D5fa6f5Fe367BB85B93B1058a","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:05"}
+{"level":"info","message":"Starting relay service...","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:05"}
+{"host":"localhost","level":"info","message":"Relay server started","port":3000,"service":"lifesignal-relay","timestamp":"2025-07-05 23:56:05"}
+{"blockNumber":8700465,"chainId":"11155111","level":"info","message":"Sepolia connection established","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:05"}
+{"blockNumber":12440908,"chainId":"23295","level":"info","message":"Sapphire connection established","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:06"}
+{"level":"info","message":"Starting to listen to Sapphire events","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:06"}
+{"level":"info","message":"Starting to listen to Sepolia events","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:06"}
+{"level":"info","message":"Event listeners started","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:06"}
+{"level":"info","message":"Periodic tasks started","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:06"}
+{"level":"info","message":"Relay service started successfully","service":"lifesignal-relay","timestamp":"2025-07-05 23:56:06"}
+{"ip":"::1","level":"info","message":"GET /owner/0xD448E18287ED6b6D5fa6f5Fe367BB85B93B1058a","service":"lifesignal-relay","timestamp":"2025-07-06 00:00:09","userAgent":"curl/8.13.0"}
+{"level":"info","message":"Shutting down relay server...","service":"lifesignal-relay","timestamp":"2025-07-06 00:05:55"}
