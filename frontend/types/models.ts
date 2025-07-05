@@ -10,8 +10,8 @@ export interface Vault {
   id: string;
   name: string;
   owner: string; // address
-  files: VaultFile[];
-  contacts: User[];
+  files?: VaultFile[];
+  contacts?: User[];
   isReleased: boolean;
   cypher: {
     iv: string;
@@ -21,10 +21,22 @@ export interface Vault {
 
 export interface User {
   id: string;
-  address: string;
-  firstname: string;
-  lastname: string;
+  address?: string;
+  firstName: string;
+  lastName: string;
+  birthDate?: string;
   email?: string;
+  phone?: string;
+  isIdVerified: boolean;
+}
+
+export interface Contact extends User {
+  hasVotingRight: boolean;
+  vaults?: Vault[];
+  owner: Owner;
+}
+
+export interface Owner extends User {
   status: 'active' | 'voting_in_progress' | 'grace_period' | 'dead';
   graceInterval: number; // days
   birthDate?: string;
@@ -37,8 +49,8 @@ export interface User {
     consensusReached: boolean;
     consensusReachedAt?: string;
   } | null;
-  vaults: Vault[];
-  contacts: User[];
+  vaults?: Vault[];
+  contacts?: User[];
 }
 
 // Circular type references require TypeScript's type merging.
