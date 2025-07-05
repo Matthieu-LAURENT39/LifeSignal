@@ -6,23 +6,25 @@ interface ContactCreatorProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (contact: {
-    firstname: string;
-    lastname: string;
-    contact: string;
-    contactType: 'email' | 'phone';
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    contactAddress: string;
     hasVotingRight: boolean;
-    selectedVaultIds: string[];
+    selectedVaultAddresses: string[];
   }) => void;
   availableVaults: Vault[];
 }
 
 export default function ContactCreator({ isOpen, onClose, onSubmit, availableVaults }: ContactCreatorProps) {
-  const [firstname, setFirstname] = useState('');
-  const [lastname, setLastname] = useState('');
-  const [contact, setContact] = useState('');
-  const [contactType, setContactType] = useState<'email' | 'phone'>('email');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [contactAddress, setContactAddress] = useState('');
   const [hasVotingRight, setHasVotingRight] = useState(false);
-  const [selectedVaultIds, setSelectedVaultIds] = useState<string[]>([]);
+  const [selectedVaultAddresses, setSelectedVaultAddresses] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   if (!isOpen) return null;
@@ -30,16 +32,21 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!firstname.trim()) newErrors.firstname = 'First name is required';
-    if (!lastname.trim()) newErrors.lastname = 'Last name is required';
-    if (!contact.trim()) newErrors.contact = `${contactType === 'email' ? 'Email' : 'Phone'} is required`;
-    if (selectedVaultIds.length === 0) newErrors.vaults = 'Please select at least one vault';
+    if (!firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!lastName.trim()) newErrors.lastName = 'Last name is required';
+    if (!email.trim()) newErrors.email = 'Email is required';
+    if (!phone.trim()) newErrors.phone = 'Phone is required';
+    if (!contactAddress.trim()) newErrors.contactAddress = 'Contact address is required';
+    if (selectedVaultAddresses.length === 0) newErrors.vaults = 'Please select at least one vault';
 
-    if (contactType === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
-      newErrors.contact = 'Invalid email format';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = 'Invalid email format';
     }
-    if (contactType === 'phone' && !/^\+?[\d\s-]{8,}$/.test(contact)) {
-      newErrors.contact = 'Invalid phone number format';
+    if (!/^\+?[\d\s-]{8,}$/.test(phone)) {
+      newErrors.phone = 'Invalid phone number format';
+    }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(contactAddress)) {
+      newErrors.contactAddress = 'Invalid Ethereum address format';
     }
 
     setErrors(newErrors);
@@ -51,28 +58,30 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
     
     if (validateForm()) {
       onSubmit({
-        firstname,
-        lastname,
-        contact,
-        contactType,
+        firstName,
+        lastName,
+        email,
+        phone,
+        contactAddress,
         hasVotingRight,
-        selectedVaultIds
+        selectedVaultAddresses
       });
       
       // Reset form
-      setFirstname('');
-      setLastname('');
-      setContact('');
-      setContactType('email');
+      setFirstName('');
+      setLastName('');
+      setEmail('');
+      setPhone('');
+      setContactAddress('');
       setHasVotingRight(false);
-      setSelectedVaultIds([]);
+      setSelectedVaultAddresses([]);
       setErrors({});
       onClose();
     }
   };
 
   const toggleVault = (vaultId: string) => {
-    setSelectedVaultIds(prev => 
+    setSelectedVaultAddresses(prev => 
       prev.includes(vaultId)
         ? prev.filter(id => id !== vaultId)
         : [...prev, vaultId]
@@ -109,61 +118,69 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
               <label className="block text-white/80 text-sm mb-2">First Name</label>
               <input
                 type="text"
-                value={firstname}
-                onChange={(e) => setFirstname(e.target.value)}
-                className={`w-full px-4 py-2 bg-white/5 border ${errors.firstname ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className={`w-full px-4 py-2 bg-white/5 border ${errors.firstName ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
                 placeholder="John"
               />
-              {errors.firstname && (
-                <p className="text-red-400 text-xs mt-1">{errors.firstname}</p>
+              {errors.firstName && (
+                <p className="text-red-400 text-xs mt-1">{errors.firstName}</p>
               )}
             </div>
             <div>
               <label className="block text-white/80 text-sm mb-2">Last Name</label>
               <input
                 type="text"
-                value={lastname}
-                onChange={(e) => setLastname(e.target.value)}
-                className={`w-full px-4 py-2 bg-white/5 border ${errors.lastname ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className={`w-full px-4 py-2 bg-white/5 border ${errors.lastName ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
                 placeholder="Doe"
               />
-              {errors.lastname && (
-                <p className="text-red-400 text-xs mt-1">{errors.lastname}</p>
+              {errors.lastName && (
+                <p className="text-red-400 text-xs mt-1">{errors.lastName}</p>
               )}
             </div>
           </div>
 
           <div>
-            <label className="block text-white/80 text-sm mb-2">Contact Method</label>
-            <div className="flex gap-4 mb-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  checked={contactType === 'email'}
-                  onChange={() => setContactType('email')}
-                  className="mr-2"
-                />
-                <span className="text-white/80">Email</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  checked={contactType === 'phone'}
-                  onChange={() => setContactType('phone')}
-                  className="mr-2"
-                />
-                <span className="text-white/80">Phone</span>
-              </label>
-            </div>
+            <label className="block text-white/80 text-sm mb-2">Email</label>
             <input
-              type={contactType === 'email' ? 'email' : 'tel'}
-              value={contact}
-              onChange={(e) => setContact(e.target.value)}
-              className={`w-full px-4 py-2 bg-white/5 border ${errors.contact ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
-              placeholder={contactType === 'email' ? 'john@example.com' : '+1234567890'}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={`w-full px-4 py-2 bg-white/5 border ${errors.email ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
+              placeholder="john@example.com"
             />
-            {errors.contact && (
-              <p className="text-red-400 text-xs mt-1">{errors.contact}</p>
+            {errors.email && (
+              <p className="text-red-400 text-xs mt-1">{errors.email}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-white/80 text-sm mb-2">Phone</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className={`w-full px-4 py-2 bg-white/5 border ${errors.phone ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
+              placeholder="+1234567890"
+            />
+            {errors.phone && (
+              <p className="text-red-400 text-xs mt-1">{errors.phone}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-white/80 text-sm mb-2">Contact Address</label>
+            <input
+              type="text"
+              value={contactAddress}
+              onChange={(e) => setContactAddress(e.target.value)}
+              className={`w-full px-4 py-2 bg-white/5 border ${errors.contactAddress ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
+              placeholder="0x..."
+            />
+            {errors.contactAddress && (
+              <p className="text-red-400 text-xs mt-1">{errors.contactAddress}</p>
             )}
           </div>
 
@@ -174,14 +191,14 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
                 <label
                   key={vault.id}
                   className={`flex items-center p-3 rounded-xl border transition-colors cursor-pointer ${
-                    selectedVaultIds.includes(vault.id)
+                    selectedVaultAddresses.includes(vault.id)
                       ? 'bg-white/10 border-white/40'
                       : 'bg-white/5 border-white/20 hover:bg-white/10'
                   }`}
                 >
                   <input
                     type="checkbox"
-                    checked={selectedVaultIds.includes(vault.id)}
+                    checked={selectedVaultAddresses.includes(vault.id)}
                     onChange={() => toggleVault(vault.id)}
                     className="mr-3"
                   />

@@ -12,100 +12,7 @@ import ContactCreator from '../../components/ContactCreator';
 import OwnerRegistration from '../../components/OwnerRegistration';
 import VaultManager from '../../components/VaultManager';
 import { useLifeSignalRegistryRead, useLifeSignalRegistryWrite } from '../../lib/contracts';
-
-const buildMockData = (ownerAddr: string): Owner => {
-  // files
-  const f1: VaultFile = {
-    id: 'f1',
-    originalName: 'passport.pdf',
-    mimeType: 'application/pdf',
-    cid: 'QmXr…xyz',
-    uploadDate: '2024-01-15T10:15:00Z'
-  };
-
-  // vaults
-  const v1: Vault = {
-    id: 'v1',
-    name: 'Family Documents',
-    owner: ownerAddr,
-    files: [f1],
-    contacts: [],           // remplis plus bas
-    isReleased: false,
-    cypher: {
-      iv: 'dGVzdA==',
-      encryptionKey: 'base64-key…'
-    },
-  };
-
-  const v2: Vault = {
-    id: 'v2',
-    name: 'Business Assets',
-    owner: ownerAddr,
-    files: [],
-    contacts: [],
-    isReleased: false,
-    cypher: {
-      iv: 'dGVzdDI=',
-      encryptionKey: 'base64-key-2'
-    },
-  };
-
-  // contacts
-  const c1: Contact = {
-    id: 'c1',
-    address: '0xHeir1',
-    firstName: 'Sarah',
-    lastName: 'Johnson',
-    email: 'sarah@example.com',
-    birthDate: '1990-03-12',
-    hasVotingRight: true,
-    isIdVerified: true,
-    vaults: [],
-    owner: {} as Owner // will be set later
-  };
-
-  const c2: Contact = {
-    id: 'c2',
-    address: '0xHeir2',
-    firstName: 'Mike',
-    lastName: 'Wilson',
-    email: 'mike@example.com',
-    birthDate: '1988-07-22',
-    hasVotingRight: false,
-    isIdVerified: false,
-    vaults: [],
-    owner: {} as Owner // will be set later
-  };
-
-  // link contacts to vaults
-  v1.contacts = [c1, c2];
-  v2.contacts = [c1];
-  c1.vaults = [v1, v2];
-  c2.vaults = [v1];
-
-  // utilisateur courant
-  const owner: Owner = {
-    id: 'u1',
-    address: ownerAddr,
-    firstName: 'Alice',
-    lastName: 'Owner',
-    email: 'alice@domain.com',
-    phone: '0606060606',
-    status: 'active',
-    graceInterval: 30,
-    deathDeclaration: null,
-    hasVotingRight: false,
-    isIdVerified: true,
-    vaults: [v1, v2],
-    contacts: [c1, c2]
-  };
-
-  // Set owner reference in contacts
-  c1.owner = owner;
-  c2.owner = owner;
-
-  return owner;
-};
+import { contractUtils } from '../../lib/contracts';
 
 export default function UserPortal() {
   const { address, isConnected } = useAccount();
@@ -114,6 +21,15 @@ export default function UserPortal() {
     address ? [address] : undefined, 
     {
       enabled: !!address && isConnected,
+    }
+  );
+  
+  // Get owner's vault list from blockchain
+  const { data: vaultList, error: vaultListError, isLoading: vaultListLoading } = useLifeSignalRegistryRead(
+    'getOwnerVaultList',
+    address ? [address] : undefined,
+    {
+      enabled: !!address && isConnected && !!ownerInfo && (ownerInfo as any)[5], // exists is the 6th element
     }
   );
   
@@ -138,13 +54,13 @@ export default function UserPortal() {
     }
 
     // Check registration status based on contract data
-    if (ownerLoading) {
+    if (ownerLoading || vaultListLoading) {
       setIsLoading(true);
       return;
     }
 
-    if (ownerError) {
-      console.error('Error checking registration:', ownerError);
+    if (ownerError || vaultListError) {
+      console.error('Error checking registration:', ownerError || vaultListError);
       setIsRegistered(false);
       setIsLoading(false);
       return;
@@ -159,8 +75,10 @@ export default function UserPortal() {
       if (exists) {
         console.log('User is already registered:', { firstName, lastName, exists, isDeceased });
         setIsRegistered(true);
-        // Load user data if registered
-        setCurrentUser(buildMockData(address));
+        
+        // Build user data from blockchain data
+        const userData = buildUserDataFromBlockchain(address, firstName, lastName, vaultList || [], Number(graceInterval || 30));
+        setCurrentUser(userData);
       } else {
         console.log('User is not registered - exists is false');
         setIsRegistered(false);
@@ -171,16 +89,49 @@ export default function UserPortal() {
     }
     
     setIsLoading(false);
-  }, [isConnected, address, ownerInfo, ownerError, ownerLoading]);
+  }, [isConnected, address, ownerInfo, ownerError, ownerLoading, vaultList, vaultListError, vaultListLoading]);
+
+  // Function to build user data from blockchain data
+  const buildUserDataFromBlockchain = (ownerAddr: string, firstName: string, lastName: string, vaultAddresses: string[], graceIntervalDays: number = 30): Owner => {
+    // Create vault objects from blockchain addresses
+    const vaults: Vault[] = vaultAddresses.map((vaultAddr, index) => ({
+      id: vaultAddr,
+      name: `Vault ${index + 1}`, // In a real app, you'd fetch the actual vault name
+      owner: ownerAddr,
+      files: [],
+      contacts: [],
+      isReleased: false,
+      cypher: {
+        iv: 'placeholder',
+        encryptionKey: 'placeholder'
+      }
+    }));
+
+    // Create the owner object
+    const owner: Owner = {
+      id: 'u1',
+      address: ownerAddr,
+      firstName,
+      lastName,
+      email: 'user@example.com', // Not stored on blockchain
+      phone: '+1234567890', // Not stored on blockchain
+      status: 'active',
+      graceInterval: graceIntervalDays,
+      deathDeclaration: null,
+      hasVotingRight: false,
+      isIdVerified: true,
+      vaults,
+      contacts: [] // Will be populated when contacts are added
+    };
+
+    return owner;
+  };
 
   const handleRegistrationComplete = () => {
     setShowRegistration(false);
     setIsRegistered(true);
-    // Load user data after registration
-    if (address) {
-      setCurrentUser(buildMockData(address));
-      setIsLoading(false);
-    }
+    // Load user data after registration - will be handled by the useEffect when ownerInfo updates
+    setIsLoading(false);
   };
 
   // Calculate real statistics
@@ -204,33 +155,38 @@ export default function UserPortal() {
     return colors[index % colors.length];
   };
 
-  const handleCreateVault = async ({ name, files, selectedContacts }: { name: string; files: File[]; selectedContacts: string[] }) => {
-    // Here we would normally make an API call to create the vault
-    // For now, we'll just update the local state with a mock vault
-    if (!currentUser || !currentUser.contacts) return;
+  const handleCreateVault = async ({ name, files, selectedContacts, encryptionKey, encryptedFiles }: { 
+    name: string; 
+    files: File[]; 
+    selectedContacts: string[];
+    encryptionKey: string;
+    encryptedFiles: { name: string; data: ArrayBuffer }[];
+  }) => {
+    // The vault creation is handled by the VaultCreator component which calls the smart contract
+    // Here we just need to update the local state to reflect the new vault
+    if (!currentUser || !address) return;
 
-    // Create mock VaultFiles from the uploaded files
-    const vaultFiles: VaultFile[] = files.map(file => ({
-      id: `f${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      originalName: file.name,
-      mimeType: file.type,
-      cid: `QmXr…${Math.random().toString(36).substr(2, 6)}`,
-      uploadDate: new Date().toISOString()
-    }));
-
+    // Create a new vault object for the UI
     const newVault: Vault = {
-      id: `v${Date.now()}`,
+      id: address, // Use the user's address as vault ID for now
       name,
-      owner: address!,
-      files: vaultFiles,
-      contacts: currentUser.contacts.filter(c => selectedContacts.includes(c.id)),
+      owner: address,
+      files: encryptedFiles.map((file, index) => ({
+        id: `f${Date.now()}_${index}`,
+        originalName: file.name,
+        mimeType: files[index]?.type || 'application/octet-stream',
+        cid: `QmXr…${Math.random().toString(36).substr(2, 6)}`,
+        uploadDate: new Date().toISOString()
+      })),
+      contacts: currentUser.contacts?.filter(c => selectedContacts.includes(c.id)) || [],
       isReleased: false,
       cypher: {
-        iv: 'dGVzdA==',
-        encryptionKey: 'base64-key…'
-      },
+        iv: 'placeholder',
+        encryptionKey: encryptionKey
+      }
     };
 
+    // Update the user's vault list
     setCurrentUser(prev => {
       if (!prev || !prev.vaults) return prev;
       return {
@@ -305,59 +261,74 @@ export default function UserPortal() {
     });
   };
 
-  const handleCreateContact = async ({ firstname, lastname, contact, contactType, hasVotingRight, selectedVaultIds }: { 
-    firstname: string;
-    lastname: string;
-    contact: string;
-    contactType: 'email' | 'phone';
+  const handleCreateContact = async ({ firstName, lastName, email, phone, contactAddress, hasVotingRight, selectedVaultAddresses }: { 
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    contactAddress: string;
     hasVotingRight: boolean;
-    selectedVaultIds: string[];
+    selectedVaultAddresses: string[];
   }) => {
-    if (!currentUser || !currentUser.vaults) return;
+    if (!address || !writeContract) {
+      console.error('Wallet not connected or contract not available');
+      return;
+    }
 
-    const selectedVaults = currentUser.vaults.filter(v => selectedVaultIds.includes(v.id));
-
-    // Generate a random 10-character ID
-    const randomId = Math.random().toString(36).substring(2, 12);
-
-    const newContact: Contact = {
-      id: randomId,
-      firstName: firstname,
-      lastName: lastname,
-      email: contactType === 'email' ? contact : '',
-      phone: contactType === 'phone' ? contact : '',
-      hasVotingRight,
-      isIdVerified: false,  // Will be verified through Self.ID
-      vaults: selectedVaults,
-      owner: currentUser
-    };
-
-    // Log the newly created contact
-    console.log('New contact created:', newContact);
-
-    // Update the user's contacts
-    setCurrentUser(prev => {
-      if (!prev || !prev.contacts) return prev;
-      return {
-        ...prev,
-        contacts: [...prev.contacts, newContact]
-      };
-    });
-
-    // Also update the selected vaults with the new contact
-    setCurrentUser(prev => {
-      if (!prev || !prev.vaults) return prev;
-      return {
-        ...prev,
-        vaults: prev.vaults.map(vault => 
-          selectedVaultIds.includes(vault.id)
-            ? { ...vault, contacts: [...(vault.contacts || []), newContact] }
-            : vault
-        )
-      };
-    });
-
-    setIsContactCreatorOpen(false);
+    try {
+      console.log('Creating contact with data:', { firstName, lastName, email, phone, contactAddress, hasVotingRight, selectedVaultAddresses });
+      
+      // Use the contract utility to add contact with authorized vaults
+      const hash = await contractUtils.addContact(
+        writeContract,
+        contactAddress,
+        firstName,
+        lastName,
+        email,
+        phone,
+        hasVotingRight,
+        selectedVaultAddresses
+      );
+      
+      console.log('Contact created successfully:', hash);
+      
+      // Update local state to reflect the new contact
+      if (currentUser) {
+        const newContact: Contact = {
+          id: contactAddress,
+          firstName,
+          lastName,
+          email,
+          phone,
+          hasVotingRight,
+          isIdVerified: false,
+          vaults: selectedVaultAddresses.map(id => ({
+            id,
+            name: 'Vault',
+            owner: address,
+            files: [],
+            contacts: [],
+            isReleased: false,
+            cypher: {
+              iv: 'placeholder',
+              encryptionKey: 'placeholder'
+            }
+          })),
+          owner: address
+        };
+        
+        setCurrentUser(prev => {
+          if (!prev || !prev.contacts) return prev;
+          return {
+            ...prev,
+            contacts: [...(prev.contacts || []), newContact]
+          };
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error creating contact:', error);
+    }
   };
 
   if (isLoading) {
@@ -842,6 +813,13 @@ export default function UserPortal() {
         onSubmit={handleCreateContact}
         availableVaults={currentUser?.vaults || []}
       />
+      
+      {/* Debug logging for vault data */}
+      {isDebugMode && currentUser && (
+        <div style={{ display: 'none' }}>
+          {console.log('ContactCreator availableVaults:', currentUser.vaults)}
+        </div>
+      )}
 
       {/* Debug Section */}
       {isDebugMode && currentUser && (
