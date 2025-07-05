@@ -69,6 +69,50 @@ const downloadFile = (data: ArrayBuffer, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+// Upload encrypted file to Walrus
+const uploadToWalrus = async (encryptedData: ArrayBuffer, filename: string): Promise<string | null> => {
+  try {
+    const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+    const res = await fetch(
+      "https://publisher.walrus-testnet.walrus.space/v1/blobs?epochs=5",
+      {
+        method: "PUT",
+        body: blob,
+      }
+    );
+    
+    if (!res.ok) {
+      throw new Error(`Upload failed for ${filename}: ${res.statusText}`);
+    }
+    
+    const data = await res.json();
+    
+    // Extract blobId from response
+    const blobId = 
+      data?.newlyCreated?.blobObject?.blobId ||
+      data?.alreadyCertified?.blobId ||
+      "";
+    
+    const txId = 
+      data?.newlyCreated?.blobObject?.id ||
+      data?.alreadyCertified?.event?.txDigest ||
+      "";
+    
+    // Console log the Walrus upload details
+    console.log(`=== WALRUS UPLOAD SUCCESS ===`);
+    console.log(`File: ${filename}`);
+    console.log(`Blob ID: ${blobId}`);
+    console.log(`Transaction ID: ${txId}`);
+    console.log(`Full Response:`, data);
+    console.log(`=== END WALRUS UPLOAD ===`);
+    
+    return blobId;
+  } catch (error) {
+    console.error(`Failed to upload ${filename} to Walrus:`, error);
+    return null;
+  }
+};
+
 export default function VaultCreator({ isOpen, onClose, onSubmit, availableContacts }: VaultCreatorProps) {
   const [name, setName] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -97,8 +141,9 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       console.log('Vault Name:', name);
       console.log('Encryption Key (Base64):', exportedKey);
       
-      // Encrypt all files
+      // Encrypt all files and upload to Walrus
       const encryptedFiles: { name: string; data: ArrayBuffer }[] = [];
+      const walrusBlobIds: string[] = [];
       
       for (const file of files) {
         const encryptionResult = await encryptFile(file, encryptionKey);
@@ -115,10 +160,16 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
         console.log(`  IV (Hex): ${ivHex}`);
         console.log(`  IV (Base64): ${btoa(String.fromCharCode(...encryptionResult.iv))}`);
         
-        // Download encrypted file for debugging
-        downloadFile(encryptionResult.data, `${file.name}.encrypted`);
+        // Upload encrypted file to Walrus instead of downloading
+        const blobId = await uploadToWalrus(encryptionResult.data, `${file.name}.encrypted`);
+        if (blobId) {
+          walrusBlobIds.push(blobId);
+        }
       }
       
+      console.log('=== VAULT WALRUS SUMMARY ===');
+      console.log('Total files uploaded:', walrusBlobIds.length);
+      console.log('All Blob IDs:', walrusBlobIds);
       console.log('=== END VAULT ENCRYPTION DEBUG ===');
       
       onSubmit({ 
@@ -136,8 +187,8 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       setStep('name');
       
     } catch (error) {
-      console.error('Encryption failed:', error);
-      alert('Failed to encrypt files. Please try again.');
+      console.error('Encryption or upload failed:', error);
+      alert('Failed to encrypt files or upload to Walrus. Please try again.');
     } finally {
       setIsEncrypting(false);
     }
@@ -410,7 +461,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
               <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              Encrypting files with AES-256-GCM...
+              Encrypting files and uploading to Walrus...
             </p>
           </div>
         )}
