@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
-import { useLifeSignalRegistryRead, useLifeSignalRegistryWrite, contractUtils, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
+import { useLifeSignalRegistryWrite, contractUtils, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import { useReadContract } from 'wagmi';
 import type { Vault, VaultFile, User } from '../types/models';
 
@@ -11,9 +11,90 @@ interface VaultManagerProps {
   className?: string;
 }
 
+// Encryption utilities
+const generateEncryptionKey = async (): Promise<CryptoKey> => {
+  return await crypto.subtle.generateKey(
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    true,
+    ['encrypt', 'decrypt']
+  );
+};
+
+const encryptFile = async (file: File, key: CryptoKey): Promise<{ data: ArrayBuffer; iv: Uint8Array }> => {
+  const fileBuffer = await file.arrayBuffer();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  
+  const encryptedData = await crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv: iv,
+    },
+    key,
+    fileBuffer
+  );
+  
+  // Prepend IV to encrypted data
+  const result = new Uint8Array(iv.length + encryptedData.byteLength);
+  result.set(iv);
+  result.set(new Uint8Array(encryptedData), iv.length);
+  
+  return { data: result.buffer, iv };
+};
+
+const exportKey = async (key: CryptoKey): Promise<string> => {
+  const exported = await crypto.subtle.exportKey('raw', key);
+  return btoa(String.fromCharCode(...new Uint8Array(exported)));
+};
+
+// Upload encrypted file to Walrus
+const uploadToWalrus = async (encryptedData: ArrayBuffer, filename: string): Promise<string | null> => {
+  try {
+    const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+    const res = await fetch(
+      "https://publisher.walrus-testnet.walrus.space/v1/blobs?epochs=5",
+      {
+        method: "PUT",
+        body: blob,
+      }
+    );
+    
+    if (!res.ok) {
+      throw new Error(`Upload failed for ${filename}: ${res.statusText}`);
+    }
+    
+    const data = await res.json();
+    
+    // Extract blobId from response
+    const blobId = 
+      data?.newlyCreated?.blobObject?.blobId ||
+      data?.alreadyCertified?.blobId ||
+      "";
+    
+    const txId = 
+      data?.newlyCreated?.blobObject?.id ||
+      data?.alreadyCertified?.event?.txDigest ||
+      "";
+    
+    // Console log the Walrus upload details
+    console.log(`=== WALRUS UPLOAD SUCCESS ===`);
+    console.log(`File: ${filename}`);
+    console.log(`Blob ID: ${blobId}`);
+    console.log(`Transaction ID: ${txId}`);
+    console.log(`Full Response:`, data);
+    console.log(`=== END WALRUS UPLOAD ===`);
+    
+    return blobId;
+  } catch (error) {
+    console.error(`Failed to upload ${filename} to Walrus:`, error);
+    return null;
+  }
+};
+
 export default function VaultManager({ className = '' }: VaultManagerProps) {
   const { address, isConnected } = useAccount();
-  const { data: readData, error: readError } = useLifeSignalRegistryRead();
   const { writeContract, isPending, error: writeError } = useLifeSignalRegistryWrite();
 
   const [vaults, setVaults] = useState<Vault[]>([]);
@@ -23,6 +104,12 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
   const [showAddFile, setShowAddFile] = useState(false);
   const [showAuthorizeContact, setShowAuthorizeContact] = useState(false);
   const [availableContacts, setAvailableContacts] = useState<User[]>([]);
+  
+  // File upload states
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isEncrypting, setIsEncrypting] = useState(false);
+  const [isUploadingToWalrus, setIsUploadingToWalrus] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form states
   const [newVault, setNewVault] = useState({
@@ -147,6 +234,93 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
     }
   };
 
+  // File upload handlers
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+      setNewFile(prev => ({
+        ...prev,
+        originalName: file.name,
+        mimeType: file.type,
+        fileId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      }));
+    }
+  };
+
+  const handleFileDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    if (file) {
+      setUploadedFile(file);
+      setNewFile(prev => ({
+        ...prev,
+        originalName: file.name,
+        mimeType: file.type,
+        fileId: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      }));
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const handleUploadAndEncrypt = async () => {
+    if (!uploadedFile) return;
+
+    try {
+      setIsEncrypting(true);
+      setIsUploadingToWalrus(true);
+
+      // Generate encryption key
+      const encryptionKey = await generateEncryptionKey();
+      const exportedKey = await exportKey(encryptionKey);
+
+      console.log('=== FILE ENCRYPTION DEBUG ===');
+      console.log('File:', uploadedFile.name);
+      console.log('Encryption Key (Base64):', exportedKey);
+
+      // Encrypt file
+      const encryptionResult = await encryptFile(uploadedFile, encryptionKey);
+      
+      // Console log the IV
+      const ivHex = Array.from(encryptionResult.iv)
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+      console.log(`IV (Hex): ${ivHex}`);
+      console.log(`IV (Base64): ${btoa(String.fromCharCode(...encryptionResult.iv))}`);
+
+      // Upload to Walrus
+      const blobId = await uploadToWalrus(encryptionResult.data, `${uploadedFile.name}.encrypted`);
+      
+      if (blobId) {
+        setNewFile(prev => ({
+          ...prev,
+          cid: blobId
+        }));
+        console.log('File uploaded successfully with Blob ID:', blobId);
+        console.log('=== END FILE ENCRYPTION DEBUG ===');
+      } else {
+        alert('Failed to upload file to Walrus');
+      }
+    } catch (error) {
+      console.error('Error encrypting/uploading file:', error);
+      alert('Failed to encrypt or upload file');
+    } finally {
+      setIsEncrypting(false);
+      setIsUploadingToWalrus(false);
+    }
+  };
+
   const handleAddFile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!writeContract || !selectedVault) return;
@@ -161,6 +335,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
 
       setShowAddFile(false);
       setNewFile({ originalName: '', mimeType: '', cid: '', fileId: '' });
+      setUploadedFile(null);
       
       // Reload vaults after a delay
       setTimeout(() => {
@@ -193,6 +368,13 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
     } catch (error) {
       console.error('Error authorizing contact:', error);
     }
+  };
+
+  const resetAddFileForm = () => {
+    setNewFile({ originalName: '', mimeType: '', cid: '', fileId: '' });
+    setUploadedFile(null);
+    setIsEncrypting(false);
+    setIsUploadingToWalrus(false);
   };
 
   const handleReleaseVault = async (vaultId: string) => {
@@ -426,10 +608,83 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
             >
               <h3 className="text-2xl font-bold text-white mb-6">Add File to {selectedVault.name}</h3>
               
+              {/* Loading States */}
+              {isEncrypting && (
+                <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+                  <p className="text-blue-300 text-sm flex items-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Encrypting file and uploading to Walrus...
+                  </p>
+                </div>
+              )}
+              
+              {/* File Upload Section */}
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-white/80 text-sm font-medium mb-2">
+                    Upload File
+                  </label>
+                  <div
+                    onDrop={handleFileDrop}
+                    onDragOver={handleDragOver}
+                    className="relative border-2 border-dashed border-white/30 rounded-xl p-6 text-center hover:border-emerald-400/50 transition-colors cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      accept="*/*"
+                    />
+                    
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">Click to select file</p>
+                        <p className="text-white/50 text-sm">or drag & drop here</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {uploadedFile && (
+                  <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-white font-medium">{uploadedFile.name}</p>
+                          <p className="text-white/50 text-sm">{formatFileSize(uploadedFile.size)}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleUploadAndEncrypt}
+                        disabled={isEncrypting || isUploadingToWalrus}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isEncrypting ? 'Encrypting...' : 'Encrypt & Upload'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               <form onSubmit={handleAddFile} className="space-y-4">
                 <div>
                   <label className="block text-white/80 text-sm font-medium mb-2">
-                    File Name
+                    File Name {uploadedFile && <span className="text-emerald-400 text-xs">(auto-filled)</span>}
                   </label>
                   <input
                     type="text"
@@ -443,7 +698,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
 
                 <div>
                   <label className="block text-white/80 text-sm font-medium mb-2">
-                    MIME Type
+                    MIME Type {uploadedFile && <span className="text-emerald-400 text-xs">(auto-filled)</span>}
                   </label>
                   <input
                     type="text"
@@ -457,7 +712,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
 
                 <div>
                   <label className="block text-white/80 text-sm font-medium mb-2">
-                    File ID
+                    File ID {uploadedFile && <span className="text-emerald-400 text-xs">(auto-generated)</span>}
                   </label>
                   <input
                     type="text"
@@ -471,16 +726,25 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
 
                 <div>
                   <label className="block text-white/80 text-sm font-medium mb-2">
-                    CID (IPFS Hash)
+                    CID (Walrus Blob ID) {newFile.cid && <span className="text-emerald-400 text-xs">✓ From Walrus</span>}
                   </label>
                   <input
                     type="text"
                     value={newFile.cid}
                     onChange={(e) => setNewFile(prev => ({ ...prev, cid: e.target.value }))}
-                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                    placeholder="Qm..."
+                    className={`w-full px-4 py-2 border rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
+                      newFile.cid && uploadedFile 
+                        ? 'bg-emerald-500/10 border-emerald-500/50' 
+                        : 'bg-white/10 border-white/20'
+                    }`}
+                    placeholder="Upload file to auto-fill with Walrus blob ID"
                     required
                   />
+                  {newFile.cid && uploadedFile && (
+                    <p className="text-emerald-400 text-xs mt-1">
+                      ✓ File successfully uploaded to Walrus
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex gap-4 pt-4">
@@ -488,7 +752,10 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     type="button"
-                    onClick={() => setShowAddFile(false)}
+                    onClick={() => {
+                      setShowAddFile(false);
+                      resetAddFileForm();
+                    }}
                     className="flex-1 px-6 py-3 bg-white/10 text-white font-medium rounded-xl border border-white/20 hover:bg-white/20"
                   >
                     Cancel
@@ -575,10 +842,10 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
       </AnimatePresence>
 
       {/* Error Display */}
-      {(readError || writeError) && (
+      {writeError && (
         <div className="fixed bottom-4 right-4 bg-red-500/90 text-white px-6 py-3 rounded-xl shadow-lg">
           <p className="text-sm">
-            {readError?.message || writeError?.message || 'An error occurred'}
+            {writeError?.message || 'An error occurred'}
           </p>
         </div>
       )}
