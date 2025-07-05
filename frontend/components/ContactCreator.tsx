@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { useAccount } from 'wagmi';
+import { useLifeSignalRegistryWrite, contractUtils } from '../lib/contracts';
 import type { Vault } from '../types/models';
 
 interface ContactCreatorProps {
@@ -17,6 +19,9 @@ interface ContactCreatorProps {
 }
 
 export default function ContactCreator({ isOpen, onClose, onSubmit, availableVaults }: ContactCreatorProps) {
+  const { address } = useAccount();
+  const { writeContract, isPending } = useLifeSignalRegistryWrite();
+  
   const [firstname, setFirstname] = useState('');
   const [lastname, setLastname] = useState('');
   const [contact, setContact] = useState('');
@@ -24,6 +29,7 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
   const [hasVotingRight, setHasVotingRight] = useState(false);
   const [selectedVaultIds, setSelectedVaultIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [contractError, setContractError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -46,10 +52,46 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (validateForm()) {
+    console.log('Form submitted with data:', {
+      firstname,
+      lastname,
+      contact,
+      contactType,
+      hasVotingRight,
+      selectedVaultIds
+    });
+    
+    if (!address || !writeContract) {
+      setContractError('Wallet not connected or contract not available');
+      return;
+    }
+    
+    if (!validateForm()) {
+      console.log('Form validation failed');
+      return;
+    }
+
+    setContractError(null);
+
+    try {
+      console.log('Adding contact to blockchain...');
+      
+      // Call the smart contract to add contact
+      const hash = await contractUtils.addContact(
+        writeContract,
+        firstname,
+        lastname,
+        contact, // Use the contact field as email
+        contact, // Use the contact field as phone (in real implementation, you'd separate these)
+        hasVotingRight
+      );
+      
+      console.log('Contact added successfully:', hash);
+      
+      // Call the parent onSubmit to update local state
       onSubmit({
         firstname,
         lastname,
@@ -68,6 +110,32 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
       setSelectedVaultIds([]);
       setErrors({});
       onClose();
+      
+    } catch (err) {
+      console.error('Adding contact failed:', err);
+      
+      // Handle specific error types
+      let errorMessage = 'Failed to add contact. Please try again.';
+      
+      if (err instanceof Error) {
+        const errorStr = err.message.toLowerCase();
+        
+        if (errorStr.includes('user rejected') || errorStr.includes('user denied')) {
+          errorMessage = 'Transaction was cancelled by user.';
+        } else if (errorStr.includes('insufficient funds') || errorStr.includes('gas')) {
+          errorMessage = 'Insufficient funds for transaction. Please check your wallet balance.';
+        } else if (errorStr.includes('network') || errorStr.includes('connection')) {
+          errorMessage = 'Network connection error. Please check your internet connection and try again.';
+        } else if (errorStr.includes('contract') || errorStr.includes('execution')) {
+          errorMessage = 'Smart contract execution failed. The contract may not be deployed or there might be an issue with the blockchain.';
+        } else if (errorStr.includes('encryption') || errorStr.includes('encrypt')) {
+          errorMessage = 'Data encryption failed. Please try again.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setContractError(errorMessage);
     }
   };
 
@@ -84,6 +152,15 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
     if (vaultName.toLowerCase().includes('business')) return '💼';
     if (vaultName.toLowerCase().includes('property')) return '🏠';
     return '📄';
+  };
+
+  // Check if form is ready to submit
+  const isFormReady = () => {
+    return firstname.trim() && 
+           lastname.trim() && 
+           contact.trim() && 
+           selectedVaultIds.length > 0 &&
+           (!errors.firstname && !errors.lastname && !errors.contact && !errors.vaults);
   };
 
   return (
@@ -220,19 +297,40 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
             </ul>
           </div>
 
+          {contractError && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl">
+              {contractError}
+            </div>
+          )}
+
+          {isFormReady() && !isPending && (
+            <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-xl">
+              ✅ Form is ready! Click "Add Contact" to register on the blockchain.
+            </div>
+          )}
+
           <div className="flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors"
+              disabled={isPending}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+              disabled={!isFormReady() || isPending}
+              className="px-6 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg disabled:opacity-50"
             >
-              Add Contact
+              {isPending ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Adding...</span>
+                </div>
+              ) : (
+                'Add Contact'
+              )}
             </button>
           </div>
         </form>

@@ -4,11 +4,13 @@ import { WalletConnectButton } from '../../components/WalletConnectButton';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { useSearchParams } from 'next/navigation';
 import type { Vault, VaultFile, Owner, Contact } from '../../types/models';
 import VaultCreator from '../../components/VaultCreator';
 import ContactCreator from '../../components/ContactCreator';
+import OwnerRegistration from '../../components/OwnerRegistration';
+import { useLifeSignalRegistryRead, useLifeSignalRegistryWrite } from '../../lib/contracts';
 
 const buildMockData = (ownerAddr: string): Owner => {
   // files
@@ -106,8 +108,66 @@ const buildMockData = (ownerAddr: string): Owner => {
 
 export default function UserPortal() {
   const { address, isConnected } = useAccount();
+  const { data: ownerInfo, error: ownerError, isLoading: ownerLoading } = useReadContract({
+    address: '0xf64c07E6D898e665ffAABd937890C7ee7EC4f7A8' as `0x${string}`,
+    abi: [
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "_owner",
+            "type": "address"
+          }
+        ],
+        "name": "getOwnerInfo",
+        "outputs": [
+          {
+            "internalType": "string",
+            "name": "firstName",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "lastName",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "lastHeartbeat",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "graceInterval",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "isDeceased",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "exists",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    functionName: 'getOwnerInfo',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && isConnected,
+    }
+  });
+  
+  const { writeContract, isPending } = useLifeSignalRegistryWrite();
   const [currentUser, setCurrentUser] = useState<Owner | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
+  const [showRegistration, setShowRegistration] = useState(false);
   const [selectedVault, setSelectedVault] = useState<Vault | null>(null);
   const [isVaultCreatorOpen, setIsVaultCreatorOpen] = useState(false);
   const [isContactCreatorOpen, setIsContactCreatorOpen] = useState(false);
@@ -117,20 +177,57 @@ export default function UserPortal() {
   const searchParams = useSearchParams();
   const isDebugMode = searchParams.get('debug') === 'true';
 
+  // Check if user is registered on the blockchain
   useEffect(() => {
     if (!isConnected || !address) {
+      setIsLoading(false);
+      setIsRegistered(false);
+      return;
+    }
+
+    // Check registration status based on contract data
+    if (ownerLoading) {
+      setIsLoading(true);
+      return;
+    }
+
+    if (ownerError) {
+      console.error('Error checking registration:', ownerError);
+      setIsRegistered(false);
       setIsLoading(false);
       return;
     }
 
-    // simulate API / chain fetch
-    const timer = setTimeout(() => {
-      setCurrentUser(buildMockData(address));
-      setIsLoading(false);
-    }, 800);
+    if (ownerInfo) {
+      const [firstName, lastName, lastHeartbeat, graceInterval, isDeceased, exists] = ownerInfo;
+      
+      if (exists) {
+        console.log('User is already registered:', { firstName, lastName, exists, isDeceased });
+        setIsRegistered(true);
+        // Load user data if registered
+        setCurrentUser(buildMockData(address));
+      } else {
+        console.log('User is not registered');
+        setIsRegistered(false);
+      }
+    } else {
+      console.log('No owner info found, user not registered');
+      setIsRegistered(false);
+    }
+    
+    setIsLoading(false);
+  }, [isConnected, address, ownerInfo, ownerError, ownerLoading]);
 
-    return () => clearTimeout(timer);
-  }, [isConnected, address]);
+  const handleRegistrationComplete = () => {
+    setShowRegistration(false);
+    setIsRegistered(true);
+    // Load user data after registration
+    if (address) {
+      setCurrentUser(buildMockData(address));
+    }
+    // The useReadContract hook will automatically refetch the data
+    // when the component re-renders, so we don't need to manually refetch
+  };
 
   // Calculate real statistics
   const activeVaults = currentUser?.vaults?.filter(v => !v.isReleased).length ?? 0;
@@ -312,7 +409,86 @@ export default function UserPortal() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading your vaults...</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-emerald-400 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-white mb-2">Checking Blockchain Registration</h2>
+          <p className="text-white/60">Verifying if you're already registered on Oasis Sapphire...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show registration form if user is not registered
+  if (isRegistered === false) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        {/* Background decoration */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        </div>
+        
+        {/* Wallet Button - Top Right */}
+        <div className="absolute top-4 right-4 z-20">
+          <WalletConnectButton size="md" />
+        </div>
+        
+        {/* Main content */}
+        <div className="relative z-10 px-4 py-8 md:py-16">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <Link href="/" className="text-white/60 hover:text-white/80 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </Link>
+              <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">
+                Welcome to LifeSignal
+              </h1>
+            </div>
+            <p className="text-xl text-white/80 mb-8">
+              Register to start managing your digital inheritance
+            </p>
+            
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8 max-w-md mx-auto">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">🔐</span>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Register as Owner</h2>
+                <p className="text-white/60 text-sm">
+                  Create your account on the blockchain to start using LifeSignal
+                </p>
+              </div>
+              
+              <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm font-medium text-emerald-400">Privacy Protected</span>
+                </div>
+                <p className="text-xs text-white/70">
+                  All data is encrypted using Oasis Sapphire's confidential computing before being stored on the blockchain.
+                </p>
+              </div>
+              
+              <button
+                onClick={() => setShowRegistration(true)}
+                className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 transform hover:scale-105"
+              >
+                Start Registration
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {showRegistration && (
+          <OwnerRegistration
+            onRegistrationComplete={handleRegistrationComplete}
+            onCancel={() => setShowRegistration(false)}
+          />
+        )}
       </div>
     );
   }
@@ -476,123 +652,118 @@ export default function UserPortal() {
             )}
           </div>
           
-          {/* Only show the rest of the content if not in dangerous state */}
-          {!isUserInDangerousState && (
-            <>
-              {/* Quick Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-                  <div className="text-2xl font-bold text-emerald-400 mb-1">{activeVaults}</div>
-                  <div className="text-sm text-white/60">Active Vaults</div>
-                </div>
-                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-                  <div className="text-2xl font-bold text-teal-400 mb-1">{totalFiles}</div>
-                  <div className="text-sm text-white/60">Total Files</div>
-                </div>
-                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-                  <div className="text-2xl font-bold text-cyan-400 mb-1">{totalHeirsCount}</div>
-                  <div className="text-sm text-white/60">Heirs</div>
-                </div>
-              </div>
-              
-              {/* Vaults Section */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-semibold text-white">Your Vaults</h2>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsVaultCreatorOpen(true)}
-                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
-                >
-                  <span>➕</span> Create Vault
-                </motion.button>
-              </div>
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+              <div className="text-2xl font-bold text-emerald-400 mb-1">{activeVaults}</div>
+              <div className="text-sm text-white/60">Active Vaults</div>
+            </div>
+            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+              <div className="text-2xl font-bold text-teal-400 mb-1">{totalFiles}</div>
+              <div className="text-sm text-white/60">Total Files</div>
+            </div>
+            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+              <div className="text-2xl font-bold text-cyan-400 mb-1">{totalHeirsCount}</div>
+              <div className="text-sm text-white/60">Heirs</div>
+            </div>
+          </div>
+          
+          {/* Vaults Section */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-semibold text-white">Your Vaults</h2>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setIsVaultCreatorOpen(true)}
+              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+            >
+              <span>➕</span> Create Vault
+            </motion.button>
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-                {currentUser?.vaults?.map((vault, index) => (
-                  <div key={vault.id} className="backdrop-blur-md bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
-                    {/* Gradient ring */}
-                    <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${getVaultColor(index)} blur-2xl opacity-30`} />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            {currentUser?.vaults?.map((vault, index) => (
+              <div key={vault.id} className="backdrop-blur-md bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
+                {/* Gradient ring */}
+                <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${getVaultColor(index)} blur-2xl opacity-30`} />
 
-                    <div className="flex items-center gap-3 mb-4 relative z-10">
-                      <div className={`w-12 h-12 bg-gradient-to-r ${getVaultColor(index)} rounded-2xl flex items-center justify-center text-xl`}>
-                        {getVaultIcon(vault.name)}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-white">{vault.name}</h3>
-                        <p className="text-white/60 text-xs">
-                          {vault.files?.length ?? 0} files • {vault.contacts?.length ?? 0} heirs
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="relative z-10">
-                      <button
-                        className="w-full px-3 py-2 bg-white/10 text-white/80 text-sm rounded-lg border border-white/20 hover:bg-white/20"
-                        onClick={() => setSelectedVault(vault)}
-                      >
-                        Open
-                      </button>
-                    </div>
+                <div className="flex items-center gap-3 mb-4 relative z-10">
+                  <div className={`w-12 h-12 bg-gradient-to-r ${getVaultColor(index)} rounded-2xl flex items-center justify-center text-xl`}>
+                    {getVaultIcon(vault.name)}
                   </div>
-                ))}
-              </div>
-              
-              {/* Contacts Section */}
-              <div className="flex items-center justify-between mb-4 mt-2">
-                <h2 className="text-2xl font-semibold text-white">Your Contacts</h2>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsContactCreatorOpen(true)}
-                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
-                >
-                  <span>➕</span> Add Contact
-                </motion.button>
-              </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white">{vault.name}</h3>
+                    <p className="text-white/60 text-xs">
+                      {vault.files?.length ?? 0} files • {vault.contacts?.length ?? 0} heirs
+                    </p>
+                  </div>
+                </div>
 
-              <div className="overflow-x-auto mb-12 backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl">
-                <table className="min-w-full text-sm text-white/80">
-                  <thead className="bg-white/10 text-xs uppercase tracking-wider text-white/60">
-                    <tr>
-                      <th className="py-3 px-4 text-center">ID Verified</th>
-                      <th className="py-3 px-4 text-left">Name</th>
-                      <th className="py-3 px-4 text-left">Address</th>
-                      <th className="py-3 px-4 text-center">Voting</th>
-                      <th className="py-3 px-4 text-center">Vaults</th>
+                <div className="relative z-10">
+                  <button
+                    className="w-full px-3 py-2 bg-white/10 text-white/80 text-sm rounded-lg border border-white/20 hover:bg-white/20"
+                    onClick={() => setSelectedVault(vault)}
+                  >
+                    Open
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Contacts Section */}
+          <div className="flex items-center justify-between mb-4 mt-2">
+            <h2 className="text-2xl font-semibold text-white">Your Contacts</h2>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setIsContactCreatorOpen(true)}
+              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+            >
+              <span>➕</span> Add Contact
+            </motion.button>
+          </div>
+
+          <div className="overflow-x-auto mb-12 backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl">
+            <table className="min-w-full text-sm text-white/80">
+              <thead className="bg-white/10 text-xs uppercase tracking-wider text-white/60">
+                <tr>
+                  <th className="py-3 px-4 text-center">ID Verified</th>
+                  <th className="py-3 px-4 text-left">Name</th>
+                  <th className="py-3 px-4 text-left">Address</th>
+                  <th className="py-3 px-4 text-center">Voting</th>
+                  <th className="py-3 px-4 text-center">Vaults</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentUser?.contacts?.map((contact, idx) => {
+                  const typedContact = contact as Contact;
+                  return (
+                    <tr key={contact.id} className={idx % 2 ? 'bg-white/5' : ''}>
+                      <td className="py-3 px-4 text-center">
+                        {contact.isIdVerified ? '✔️' : '❌'}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">{contact.firstName} {contact.lastName}</td>
+                      <td className="py-3 px-4 font-mono">
+                        {contact.address ? `${contact.address.slice(0,6)}…${contact.address.slice(-4)}` : 'No address'}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {typedContact.hasVotingRight ? <span className="text-green-400">Yes</span> : <span className="text-gray-400">No</span>}
+                      </td>
+                      <td className="py-3 px-4 text-center">{typedContact.vaults?.length ?? 0}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {currentUser?.contacts?.map((contact, idx) => {
-                      const typedContact = contact as Contact;
-                      return (
-                        <tr key={contact.id} className={idx % 2 ? 'bg-white/5' : ''}>
-                          <td className="py-3 px-4 text-center">
-                            {contact.isIdVerified ? '✔️' : '❌'}
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap">{contact.firstName} {contact.lastName}</td>
-                          <td className="py-3 px-4 font-mono">
-                            {contact.address ? `${contact.address.slice(0,6)}…${contact.address.slice(-4)}` : 'No address'}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            {typedContact.hasVotingRight ? <span className="text-green-400">Yes</span> : <span className="text-gray-400">No</span>}
-                          </td>
-                          <td className="py-3 px-4 text-center">{typedContact.vaults?.length ?? 0}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-              {/* Developer link */}
-              <div className="text-center">
-                <Link href="/debug" className="text-white/40 hover:text-white/60 text-sm transition-colors">
-                  Developer Tools
-                </Link>
-              </div>
-            </>
-          )}
+          {/* Developer link */}
+          <div className="text-center">
+            <Link href="/debug" className="text-white/40 hover:text-white/60 text-sm transition-colors">
+              Developer Tools
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -749,6 +920,14 @@ export default function UserPortal() {
         onSubmit={handleCreateContact}
         availableVaults={currentUser?.vaults || []}
       />
+
+      {/* Owner Registration Modal */}
+      {showRegistration && (
+        <OwnerRegistration
+          onRegistrationComplete={handleRegistrationComplete}
+          onCancel={() => setShowRegistration(false)}
+        />
+      )}
 
       {/* Debug Section */}
       {isDebugMode && currentUser && (
