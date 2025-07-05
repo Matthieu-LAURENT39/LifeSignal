@@ -11,27 +11,136 @@ interface VaultCreatorProps {
     name: string;
     files: File[];
     selectedContacts: string[];
+    encryptionKey: string;
+    encryptedFiles: { name: string; data: ArrayBuffer }[];
   }) => void;
   availableContacts: User[];
 }
 
 type Step = 'name' | 'files' | 'contacts';
 
+// Encryption utilities
+const generateEncryptionKey = async (): Promise<CryptoKey> => {
+  return await crypto.subtle.generateKey(
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    true,
+    ['encrypt', 'decrypt']
+  );
+};
+
+const encryptFile = async (file: File, key: CryptoKey): Promise<{ data: ArrayBuffer; iv: Uint8Array }> => {
+  const fileBuffer = await file.arrayBuffer();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  
+  const encryptedData = await crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv: iv,
+    },
+    key,
+    fileBuffer
+  );
+  
+  // Prepend IV to encrypted data
+  const result = new Uint8Array(iv.length + encryptedData.byteLength);
+  result.set(iv);
+  result.set(new Uint8Array(encryptedData), iv.length);
+  
+  return { data: result.buffer, iv };
+};
+
+const exportKey = async (key: CryptoKey): Promise<string> => {
+  const exported = await crypto.subtle.exportKey('raw', key);
+  return btoa(String.fromCharCode(...new Uint8Array(exported)));
+};
+
+const downloadFile = (data: ArrayBuffer, filename: string) => {
+  const blob = new Blob([data], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 export default function VaultCreator({ isOpen, onClose, onSubmit, availableContacts }: VaultCreatorProps) {
   const [name, setName] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [step, setStep] = useState<Step>('name');
+  const [isEncrypting, setIsEncrypting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ name, files, selectedContacts });
-    // Reset form
-    setName('');
-    setFiles([]);
-    setSelectedContacts([]);
-    setStep('name');
+    
+    if (files.length === 0) {
+      alert('Please select at least one file');
+      return;
+    }
+    
+    setIsEncrypting(true);
+    
+    try {
+      // Generate encryption key for this vault
+      const encryptionKey = await generateEncryptionKey();
+      const exportedKey = await exportKey(encryptionKey);
+      
+      // Console log the encryption key
+      console.log('=== VAULT ENCRYPTION DEBUG ===');
+      console.log('Vault Name:', name);
+      console.log('Encryption Key (Base64):', exportedKey);
+      
+      // Encrypt all files
+      const encryptedFiles: { name: string; data: ArrayBuffer }[] = [];
+      
+      for (const file of files) {
+        const encryptionResult = await encryptFile(file, encryptionKey);
+        encryptedFiles.push({
+          name: file.name,
+          data: encryptionResult.data
+        });
+        
+        // Console log the IV for this file
+        const ivHex = Array.from(encryptionResult.iv)
+          .map(byte => byte.toString(16).padStart(2, '0'))
+          .join('');
+        console.log(`File: ${file.name}`);
+        console.log(`  IV (Hex): ${ivHex}`);
+        console.log(`  IV (Base64): ${btoa(String.fromCharCode(...encryptionResult.iv))}`);
+        
+        // Download encrypted file for debugging
+        downloadFile(encryptionResult.data, `${file.name}.encrypted`);
+      }
+      
+      console.log('=== END VAULT ENCRYPTION DEBUG ===');
+      
+      onSubmit({ 
+        name, 
+        files, 
+        selectedContacts, 
+        encryptionKey: exportedKey,
+        encryptedFiles 
+      });
+      
+      // Reset form
+      setName('');
+      setFiles([]);
+      setSelectedContacts([]);
+      setStep('name');
+      
+    } catch (error) {
+      console.error('Encryption failed:', error);
+      alert('Failed to encrypt files. Please try again.');
+    } finally {
+      setIsEncrypting(false);
+    }
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,10 +338,10 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
                   >
                     <div>
                       <div className="text-white font-medium">
-                        {contact.firstname} {contact.lastname}
+                        {contact.firstName} {contact.lastName}
                       </div>
                       <div className="text-white/60 text-sm font-mono">
-                        {contact.address.slice(0,6)}...{contact.address.slice(-4)}
+                        {contact.address?.slice(0,6)}...{contact.address?.slice(-4)}
                       </div>
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
@@ -264,9 +373,10 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 type="submit"
-                className="px-6 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+                disabled={isEncrypting}
+                className="px-6 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create Vault
+                {isEncrypting ? 'Encrypting...' : 'Create Vault'}
               </motion.button>
             </div>
           </div>
@@ -293,6 +403,17 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
         </button>
 
         <h2 className="text-2xl font-semibold text-white mb-6">Create New Vault</h2>
+
+        {isEncrypting && (
+          <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+            <p className="text-blue-300 text-sm flex items-center gap-2">
+              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Encrypting files with AES-256-GCM...
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {renderStep()}
