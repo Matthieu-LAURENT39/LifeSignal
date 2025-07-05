@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { decryptFile } from '../lib/crypto/encryption';
+import { CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
 
 // Web Crypto API decryption function to match the encryption method used in VaultManager
 const decryptFileWebCrypto = async (
@@ -106,11 +107,7 @@ export function VaultDashboard({ className = '' }: VaultDashboardProps) {
   const { address, isConnected } = useAccount();
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [selectedVault, setSelectedVault] = useState<Vault | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [showAddContact, setShowAddContact] = useState(false);
-  const [lastPingTime, setLastPingTime] = useState<string>('');
-  const [nextPingDue, setNextPingDue] = useState<string>('');
-  const [pingInterval] = useState<number>(14); // 14 days
   const [newContact, setNewContact] = useState({
     address: '',
     name: '',
@@ -118,8 +115,11 @@ export function VaultDashboard({ className = '' }: VaultDashboardProps) {
     role: 'heir' as 'heir' | 'contact',
     votingWeight: 1
   });
-
-
+  const [tooltipVisible, setTooltipVisible] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastPingTime, setLastPingTime] = useState<string>('');
+  const [nextPingDue, setNextPingDue] = useState<string>('');
+  const [pingInterval] = useState<number>(14); // 14 days
 
   // Mock data - in a real app, this would come from the blockchain
   useEffect(() => {
@@ -290,10 +290,6 @@ export function VaultDashboard({ className = '' }: VaultDashboardProps) {
       return { status: 'good', color: 'text-green-400', bgColor: 'bg-green-500/10', borderColor: 'border-green-400/50' };
     }
   };
-
-
-
-
 
   const handlePing = () => {
     const now = new Date().toISOString();
@@ -581,6 +577,19 @@ export function VaultDashboard({ className = '' }: VaultDashboardProps) {
                 <div>
                   <h2 className="text-2xl font-bold text-white mb-2">{selectedVault.name}</h2>
                   <p className="text-white/70">{selectedVault.description}</p>
+                  <div className="flex items-center gap-2 mt-3">
+                    <a
+                      href={`https://explorer.oasis.io/address/${CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-500/20 to-red-500/20 hover:from-orange-500/30 hover:to-red-500/30 border border-orange-400/30 rounded-lg text-orange-300 text-sm transition-all duration-300 hover:scale-105"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      View Smart Contract
+                    </a>
+                  </div>
                 </div>
                 <button
                   onClick={() => setSelectedVault(null)}
@@ -613,7 +622,59 @@ export function VaultDashboard({ className = '' }: VaultDashboardProps) {
                               </svg>
                             </div>
                             <div>
-                              <p className="text-white font-medium">{file.originalName}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-white font-medium">{file.originalName}</p>
+                                <div className="relative">
+                                  <button
+                                    onMouseEnter={() => setTooltipVisible(file.id)}
+                                    onMouseLeave={() => setTooltipVisible(null)}
+                                    onClick={() => setTooltipVisible(tooltipVisible === file.id ? null : file.id)}
+                                    className="w-4 h-4 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-white/40 hover:text-white/60 transition-colors"
+                                    title="View Walrus Blob ID"
+                                  >
+                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                                    </svg>
+                                  </button>
+                                  {tooltipVisible === file.id && (
+                                    <div 
+                                      className="fixed z-[100] top-1/4 left-1/2 transform -translate-x-1/2 bg-gray-900 border border-gray-600 rounded-lg p-4 min-w-[350px] shadow-2xl"
+                                      onMouseEnter={() => setTooltipVisible(file.id)}
+                                      onMouseLeave={() => setTooltipVisible(null)}
+                                    >
+                                      <p className="text-gray-300 text-xs mb-2">Walrus Blob ID:</p>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <p className="text-white font-mono text-sm break-all bg-gray-800 p-2 rounded flex-1">{file.cid}</p>
+                                        <button
+                                          onClick={() => navigator.clipboard.writeText(file.cid)}
+                                          className="p-2 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
+                                          title="Copy to clipboard"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <a 
+                                          href={`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${file.cid}`} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-blue-400 hover:text-blue-300 underline text-sm"
+                                        >
+                                          View on Walrus ↗
+                                        </a>
+                                        <button
+                                          onClick={() => setTooltipVisible(null)}
+                                          className="text-gray-500 hover:text-gray-300 text-sm"
+                                        >
+                                          Close
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                               <p className="text-white/50 text-sm">{formatFileSize(file.size)}</p>
                               <p className="text-white/40 text-xs">{formatDate(file.uploadDate)}</p>
                             </div>

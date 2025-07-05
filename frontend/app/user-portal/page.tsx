@@ -137,6 +137,7 @@ export default function UserPortal() {
   const [showRegistration, setShowRegistration] = useState(false);
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
   const [newlyCreatedContacts, setNewlyCreatedContacts] = useState<Contact[]>([]);
+  const [tooltipVisible, setTooltipVisible] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const isDebugMode = searchParams.get('debug') === 'true';
@@ -1072,11 +1073,7 @@ export default function UserPortal() {
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-lg font-medium text-white">Files</h4>
-                {isDebugMode && (
-                  <p className="text-xs text-emerald-400/60">
-                    🔍 Hover over files to download
-                  </p>
-                )}
+
               </div>
               {!selectedVault.files?.length ? (
                 <p className="text-white/50 text-sm">No files</p>
@@ -1090,7 +1087,61 @@ export default function UserPortal() {
                       <li key={f.id} className="group flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/80 text-sm hover:bg-white/10 transition-colors">
                         <div className="flex items-center gap-3 flex-1">
                           <span>{f.originalName}</span>
-                          <span className="text-white/40 text-xs">{f.mimeType}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-white/40 text-xs">{f.mimeType}</span>
+                            {f.cid && (
+                              <div className="relative">
+                                <button
+                                  onMouseEnter={() => setTooltipVisible(f.id)}
+                                  onMouseLeave={() => setTooltipVisible(null)}
+                                  onClick={() => setTooltipVisible(tooltipVisible === f.id ? null : f.id)}
+                                  className="w-4 h-4 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-white/40 hover:text-white/60 transition-colors"
+                                  title="View Walrus Blob ID"
+                                >
+                                  <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                                  </svg>
+                                </button>
+                                {tooltipVisible === f.id && (
+                                  <div 
+                                    className="fixed z-[100] top-1/4 left-1/2 transform -translate-x-1/2 bg-gray-900 border border-gray-600 rounded-lg p-4 min-w-[350px] shadow-2xl"
+                                    onMouseEnter={() => setTooltipVisible(f.id)}
+                                    onMouseLeave={() => setTooltipVisible(null)}
+                                  >
+                                    <p className="text-gray-300 text-xs mb-2">Walrus Blob ID:</p>
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <p className="text-white font-mono text-sm break-all bg-gray-800 p-2 rounded flex-1">{f.cid}</p>
+                                      <button
+                                        onClick={() => navigator.clipboard.writeText(f.cid)}
+                                        className="p-2 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
+                                        title="Copy to clipboard"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <a 
+                                        href={`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${f.cid}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-blue-400 hover:text-blue-300 underline text-sm"
+                                      >
+                                        Download raw (encrypted) ↗
+                                      </a>
+                                      <button
+                                        onClick={() => setTooltipVisible(null)}
+                                        className="text-gray-500 hover:text-gray-300 text-sm"
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         
                         {/* Download button - always visible */}
