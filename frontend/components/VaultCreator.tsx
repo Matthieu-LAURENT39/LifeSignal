@@ -13,11 +13,107 @@ interface VaultCreatorProps {
     name: string;
     files: File[];
     selectedContacts: string[];
+    encryptionKey: string;
+    encryptedFiles: { name: string; data: ArrayBuffer }[];
   }) => void;
   availableContacts: User[];
 }
 
 type Step = 'name' | 'files' | 'contacts';
+
+// Encryption utilities
+const generateEncryptionKey = async (): Promise<CryptoKey> => {
+  return await crypto.subtle.generateKey(
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    true,
+    ['encrypt', 'decrypt']
+  );
+};
+
+const encryptFile = async (file: File, key: CryptoKey): Promise<{ data: ArrayBuffer; iv: Uint8Array }> => {
+  const fileBuffer = await file.arrayBuffer();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  
+  const encryptedData = await crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv: iv,
+    },
+    key,
+    fileBuffer
+  );
+  
+  // Prepend IV to encrypted data
+  const result = new Uint8Array(iv.length + encryptedData.byteLength);
+  result.set(iv);
+  result.set(new Uint8Array(encryptedData), iv.length);
+  
+  return { data: result.buffer, iv };
+};
+
+const exportKey = async (key: CryptoKey): Promise<string> => {
+  const exported = await crypto.subtle.exportKey('raw', key);
+  return btoa(String.fromCharCode(...new Uint8Array(exported)));
+};
+
+const downloadFile = (data: ArrayBuffer, filename: string) => {
+  const blob = new Blob([data], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+// Upload encrypted file to Walrus
+const uploadToWalrus = async (encryptedData: ArrayBuffer, filename: string): Promise<string | null> => {
+  try {
+    const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+    const res = await fetch(
+      "https://publisher.walrus-testnet.walrus.space/v1/blobs?epochs=5",
+      {
+        method: "PUT",
+        body: blob,
+      }
+    );
+    
+    if (!res.ok) {
+      throw new Error(`Upload failed for ${filename}: ${res.statusText}`);
+    }
+    
+    const data = await res.json();
+    
+    // Extract blobId from response
+    const blobId = 
+      data?.newlyCreated?.blobObject?.blobId ||
+      data?.alreadyCertified?.blobId ||
+      "";
+    
+    const txId = 
+      data?.newlyCreated?.blobObject?.id ||
+      data?.alreadyCertified?.event?.txDigest ||
+      "";
+    
+    // Console log the Walrus upload details
+    console.log(`=== WALRUS UPLOAD SUCCESS ===`);
+    console.log(`File: ${filename}`);
+    console.log(`Blob ID: ${blobId}`);
+    console.log(`Transaction ID: ${txId}`);
+    console.log(`Full Response:`, data);
+    console.log(`=== END WALRUS UPLOAD ===`);
+    
+    return blobId;
+  } catch (error) {
+    console.error(`Failed to upload ${filename} to Walrus:`, error);
+    return null;
+  }
+};
 
 export default function VaultCreator({ isOpen, onClose, onSubmit, availableContacts }: VaultCreatorProps) {
   const { address, isConnected } = useAccount();
@@ -32,6 +128,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [step, setStep] = useState<Step>('name');
   const [isCreating, setIsCreating] = useState(false);
+  const [isEncrypting, setIsEncrypting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,20 +151,64 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       }
     }
 
-
-
     if (!name.trim()) {
       console.error('Vault name is required');
       alert('Please enter a vault name');
       return;
     }
 
+    if (files.length === 0) {
+      alert('Please select at least one file');
+      return;
+    }
+
     try {
       setIsCreating(true);
+      setIsEncrypting(true);
       
-      // Generate cypherIV and encryptionKey
+      // Generate encryption key for this vault
+      const encryptionKey = await generateEncryptionKey();
+      const exportedKey = await exportKey(encryptionKey);
+      
+      // Console log the encryption key
+      console.log('=== VAULT ENCRYPTION DEBUG ===');
+      console.log('Vault Name:', name);
+      console.log('Encryption Key (Base64):', exportedKey);
+      
+      // Encrypt all files and upload to Walrus
+      const encryptedFiles: { name: string; data: ArrayBuffer }[] = [];
+      const walrusBlobIds: string[] = [];
+      
+      for (const file of files) {
+        const encryptionResult = await encryptFile(file, encryptionKey);
+        encryptedFiles.push({
+          name: file.name,
+          data: encryptionResult.data
+        });
+        
+        // Console log the IV for this file
+        const ivHex = Array.from(encryptionResult.iv)
+          .map(byte => byte.toString(16).padStart(2, '0'))
+          .join('');
+        console.log(`File: ${file.name}`);
+        console.log(`  IV (Hex): ${ivHex}`);
+        console.log(`  IV (Base64): ${btoa(String.fromCharCode(...encryptionResult.iv))}`);
+        
+        // Upload encrypted file to Walrus instead of downloading
+        const blobId = await uploadToWalrus(encryptionResult.data, `${file.name}.encrypted`);
+        if (blobId) {
+          walrusBlobIds.push(blobId);
+        }
+      }
+      
+      console.log('=== VAULT WALRUS SUMMARY ===');
+      console.log('Total files uploaded:', walrusBlobIds.length);
+      console.log('All Blob IDs:', walrusBlobIds);
+      console.log('=== END VAULT ENCRYPTION DEBUG ===');
+      
+      // Generate cypherIV and encryptionKey for blockchain
       const cypherIV = Math.random().toString(36).substring(2, 18); // 16 character random string
-      const encryptionKey = Math.random().toString(36).substring(2, 34); // 32 character random string
+      const blockchainEncryptionKey = Math.random().toString(36).substring(2, 34); // 32 character random string
       
       const vaultIdToUse = vaultId || address;
       
@@ -75,7 +216,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
         vaultId: vaultIdToUse,
         name,
         cypherIV,
-        encryptionKey: encryptionKey.substring(0, 8) + '...' // Log partial key for security
+        encryptionKey: blockchainEncryptionKey.substring(0, 8) + '...' // Log partial key for security
       });
 
       // Create vault on blockchain using smart contract
@@ -89,14 +230,14 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       }
       
       // Call writeContract directly to trigger MetaMask popup
-      console.log('About to call writeContract with args:', [vaultIdToUse, name, cypherIV, encryptionKey]);
+      console.log('About to call writeContract with args:', [vaultIdToUse, name, cypherIV, blockchainEncryptionKey]);
       
       try {
         const result = await writeContract({
           address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
           abi: LIFESIGNAL_REGISTRY_ABI,
           functionName: 'createVault',
-          args: [vaultIdToUse as `0x${string}`, name, cypherIV, encryptionKey],
+          args: [vaultIdToUse as `0x${string}`, name, cypherIV, blockchainEncryptionKey],
         });
 
         console.log('Vault creation transaction result:', result);
@@ -129,7 +270,13 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       }
 
       // Call the original onSubmit for UI updates
-      onSubmit({ name, files, selectedContacts });
+      onSubmit({ 
+        name, 
+        files, 
+        selectedContacts, 
+        encryptionKey: exportedKey,
+        encryptedFiles 
+      });
       
       // Reset form
       setName('');
@@ -144,6 +291,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       alert(`Error creating vault: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsCreating(false);
+      setIsEncrypting(false);
     }
   };
 
@@ -218,19 +366,6 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
             </div>
             
             <div className="flex justify-end mt-6">
-              {/* Commented out original "Next: Add Files" button
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                type="button"
-                onClick={() => setStep('files')}
-                disabled={!name.trim()}
-                className="px-6 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next: Add Files
-              </motion.button>
-              */}
-              
               <div className="flex gap-2">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -467,6 +602,17 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
             <p className="text-red-400 text-sm">
               Error: {writeError.message || 'Failed to create vault'}
+            </p>
+          </div>
+        )}
+
+        {isEncrypting && (
+          <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+            <p className="text-blue-300 text-sm flex items-center gap-2">
+              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Encrypting files and uploading to Walrus...
             </p>
           </div>
         )}

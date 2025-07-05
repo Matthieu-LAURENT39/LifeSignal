@@ -4,7 +4,7 @@ import { WalletConnectButton } from '../../components/WalletConnectButton';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { useAccount, useReadContract } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { useSearchParams } from 'next/navigation';
 import type { Vault, VaultFile, Owner, Contact } from '../../types/models';
 import VaultCreator from '../../components/VaultCreator';
@@ -109,80 +109,27 @@ const buildMockData = (ownerAddr: string): Owner => {
 
 export default function UserPortal() {
   const { address, isConnected } = useAccount();
-  const { data: ownerInfo, error: ownerError, isLoading: ownerLoading } = useReadContract({
-    address: '0x2449E7b5a5e252A2B5890d0537649738E7c953Eb' as `0x${string}`,
-    abi: [
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "_owner",
-            "type": "address"
-          }
-        ],
-        "name": "getOwnerInfo",
-        "outputs": [
-          {
-            "internalType": "string",
-            "name": "firstName",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "lastName",
-            "type": "string"
-          },
-          {
-            "internalType": "uint256",
-            "name": "lastHeartbeat",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "graceInterval",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bool",
-            "name": "isDeceased",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "exists",
-            "type": "bool"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      }
-    ],
-    functionName: 'getOwnerInfo',
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address && isConnected,
-    }
+  const { data: ownerInfo, error: ownerError, isLoading: ownerLoading } = useLifeSignalRegistryRead('getOwnerInfo', address ? [address] : undefined, {
+    enabled: !!address && isConnected,
   });
   
   const { writeContract, isPending } = useLifeSignalRegistryWrite();
   const [currentUser, setCurrentUser] = useState<Owner | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
-  const [showRegistration, setShowRegistration] = useState(false);
   const [selectedVault, setSelectedVault] = useState<Vault | null>(null);
   const [isVaultCreatorOpen, setIsVaultCreatorOpen] = useState(false);
   const [isContactCreatorOpen, setIsContactCreatorOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
   const [showAliveConfirm, setShowAliveConfirm] = useState(false);
+  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
+  const [showRegistration, setShowRegistration] = useState(false);
   const searchParams = useSearchParams();
   const isDebugMode = searchParams.get('debug') === 'true';
 
-  // Check if user is registered on the blockchain
   useEffect(() => {
     if (!isConnected || !address) {
       setIsLoading(false);
-      setIsRegistered(false);
       return;
     }
 
@@ -227,9 +174,8 @@ export default function UserPortal() {
     // Load user data after registration
     if (address) {
       setCurrentUser(buildMockData(address));
+      setIsLoading(false);
     }
-    // The useReadContract hook will automatically refetch the data
-    // when the component re-renders, so we don't need to manually refetch
   };
 
   // Calculate real statistics
@@ -655,124 +601,86 @@ export default function UserPortal() {
             )}
           </div>
           
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-              <div className="text-2xl font-bold text-emerald-400 mb-1">{activeVaults}</div>
-              <div className="text-sm text-white/60">Active Vaults</div>
-            </div>
-            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-              <div className="text-2xl font-bold text-teal-400 mb-1">{totalFiles}</div>
-              <div className="text-sm text-white/60">Total Files</div>
-            </div>
-            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-              <div className="text-2xl font-bold text-cyan-400 mb-1">{totalHeirsCount}</div>
-              <div className="text-sm text-white/60">Heirs</div>
-            </div>
-          </div>
-          
-          {/* Vaults Section */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-semibold text-white">Your Vaults</h2>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsVaultCreatorOpen(true)}
-              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
-            >
-              <span>➕</span> Create Vault
-            </motion.button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {currentUser?.vaults?.map((vault, index) => (
-              <div key={vault.id} className="backdrop-blur-md bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
-                {/* Gradient ring */}
-                <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${getVaultColor(index)} blur-2xl opacity-30`} />
-
-                <div className="flex items-center gap-3 mb-4 relative z-10">
-                  <div className={`w-12 h-12 bg-gradient-to-r ${getVaultColor(index)} rounded-2xl flex items-center justify-center text-xl`}>
-                    {getVaultIcon(vault.name)}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white">{vault.name}</h3>
-                    <p className="text-white/60 text-xs">
-                      {vault.files?.length ?? 0} files • {vault.contacts?.length ?? 0} heirs
-                    </p>
-                  </div>
+          {/* Only show the rest of the content if not in dangerous state */}
+          {!isUserInDangerousState && (
+            <>
+              {/* Quick Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-bold text-emerald-400 mb-1">{activeVaults}</div>
+                  <div className="text-sm text-white/60">Active Vaults</div>
                 </div>
-
-                <div className="relative z-10">
-                  <button
-                    className="w-full px-3 py-2 bg-white/10 text-white/80 text-sm rounded-lg border border-white/20 hover:bg-white/20"
-                    onClick={() => setSelectedVault(vault)}
-                  >
-                    Open
-                  </button>
+                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-bold text-teal-400 mb-1">{totalFiles}</div>
+                  <div className="text-sm text-white/60">Total Files</div>
+                </div>
+                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-bold text-cyan-400 mb-1">{totalHeirsCount}</div>
+                  <div className="text-sm text-white/60">Heirs</div>
                 </div>
               </div>
-            ))}
-          </div>
-          
-          {/* Blockchain Vault Manager */}
-          <div className="mb-12">
-            <h2 className="text-2xl font-semibold text-white mb-6">Blockchain Vault Manager</h2>
-            <VaultManager />
-          </div>
-          
-          {/* Contacts Section */}
-          <div className="flex items-center justify-between mb-4 mt-2">
-            <h2 className="text-2xl font-semibold text-white">Your Contacts</h2>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsContactCreatorOpen(true)}
-              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
-            >
-              <span>➕</span> Add Contact
-            </motion.button>
-          </div>
+              
+              {/* Blockchain Vault Manager */}
+              <div className="mb-12">
+                <h2 className="text-2xl font-semibold text-white mb-6">Blockchain Vault Manager</h2>
+                <VaultManager />
+              </div>
+              
+              {/* Contacts Section */}
+              <div className="flex items-center justify-between mb-4 mt-2">
+                <h2 className="text-2xl font-semibold text-white">Your Contacts</h2>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsContactCreatorOpen(true)}
+                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+                >
+                  <span>➕</span> Add Contact
+                </motion.button>
+              </div>
 
-          <div className="overflow-x-auto mb-12 backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl">
-            <table className="min-w-full text-sm text-white/80">
-              <thead className="bg-white/10 text-xs uppercase tracking-wider text-white/60">
-                <tr>
-                  <th className="py-3 px-4 text-center">ID Verified</th>
-                  <th className="py-3 px-4 text-left">Name</th>
-                  <th className="py-3 px-4 text-left">Address</th>
-                  <th className="py-3 px-4 text-center">Voting</th>
-                  <th className="py-3 px-4 text-center">Vaults</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentUser?.contacts?.map((contact, idx) => {
-                  const typedContact = contact as Contact;
-                  return (
-                    <tr key={contact.id} className={idx % 2 ? 'bg-white/5' : ''}>
-                      <td className="py-3 px-4 text-center">
-                        {contact.isIdVerified ? '✔️' : '❌'}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">{contact.firstName} {contact.lastName}</td>
-                      <td className="py-3 px-4 font-mono">
-                        {contact.address ? `${contact.address.slice(0,6)}…${contact.address.slice(-4)}` : 'No address'}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {typedContact.hasVotingRight ? <span className="text-green-400">Yes</span> : <span className="text-gray-400">No</span>}
-                      </td>
-                      <td className="py-3 px-4 text-center">{typedContact.vaults?.length ?? 0}</td>
+              <div className="overflow-x-auto mb-12 backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl">
+                <table className="min-w-full text-sm text-white/80">
+                  <thead className="bg-white/10 text-xs uppercase tracking-wider text-white/60">
+                    <tr>
+                      <th className="py-3 px-4 text-center">ID Verified</th>
+                      <th className="py-3 px-4 text-left">Name</th>
+                      <th className="py-3 px-4 text-left">Address</th>
+                      <th className="py-3 px-4 text-center">Voting</th>
+                      <th className="py-3 px-4 text-center">Vaults</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {currentUser?.contacts?.map((contact, idx) => {
+                      const typedContact = contact as Contact;
+                      return (
+                        <tr key={contact.id} className={idx % 2 ? 'bg-white/5' : ''}>
+                          <td className="py-3 px-4 text-center">
+                            {contact.isIdVerified ? '✔️' : '❌'}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">{contact.firstName} {contact.lastName}</td>
+                          <td className="py-3 px-4 font-mono">
+                            {contact.address ? `${contact.address.slice(0,6)}…${contact.address.slice(-4)}` : 'No address'}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            {typedContact.hasVotingRight ? <span className="text-green-400">Yes</span> : <span className="text-gray-400">No</span>}
+                          </td>
+                          <td className="py-3 px-4 text-center">{typedContact.vaults?.length ?? 0}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-          {/* Developer link */}
-          <div className="text-center">
-            <Link href="/debug" className="text-white/40 hover:text-white/60 text-sm transition-colors">
-              Developer Tools
-            </Link>
-          </div>
+              {/* Developer link */}
+              <div className="text-center">
+                <Link href="/debug" className="text-white/40 hover:text-white/60 text-sm transition-colors">
+                  Developer Tools
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -929,14 +837,6 @@ export default function UserPortal() {
         onSubmit={handleCreateContact}
         availableVaults={currentUser?.vaults || []}
       />
-
-      {/* Owner Registration Modal */}
-      {showRegistration && (
-        <OwnerRegistration
-          onRegistrationComplete={handleRegistrationComplete}
-          onCancel={() => setShowRegistration(false)}
-        />
-      )}
 
       {/* Debug Section */}
       {isDebugMode && currentUser && (
