@@ -15,7 +15,16 @@ const accounts = process.env.SAPPHIRE_PRIVATE_KEY ? [process.env.SAPPHIRE_PRIVAT
 };
 
 const config: HardhatUserConfig = {
-  solidity: "0.8.28",
+  solidity: {
+    version: "0.8.28",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      viaIR: true,
+    },
+  },
   networks: {
     "sapphire": {
       url: process.env.SAPPHIRE_RPC_URL || "https://sapphire.oasis.io",

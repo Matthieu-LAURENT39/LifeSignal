@@ -69,10 +69,9 @@ contract User {
     event IdVerificationUpdated(bool isIdVerified);
 
     constructor(
-        uint _unlockTime,
-        string calldata _firstname,
-        string calldata _lastname,
-        string calldata _email
+        string memory _firstname,
+        string memory _lastname,
+        string memory _email
     ) payable {
         userData.owner = msg.sender;
         userData.firstname = _firstname;
@@ -193,49 +192,49 @@ contract User {
     }
 
     modifier onlyContacts() {
-        bool isContact = false;
+        bool isContactFound = false;
         for (uint256 i = 0; i < contacts.length; i++) {
             if (contacts[i] == msg.sender) {
-                isContact = true;
+                isContactFound = true;
                 break;
             }
         }
-        if (!isContact) revert Unauthorized();
+        if (!isContactFound) revert Unauthorized();
         _;
     }
 
     modifier onlyVotingContacts() {
-        bool isVotingContact = false;
+        bool isVotingContactFound = false;
         for (uint256 i = 0; i < contacts.length; i++) {
             if (contacts[i] == msg.sender) {
                 // Check if this contact has voting rights (would need to check their contract)
-                isVotingContact = true;
+                isVotingContactFound = true;
                 break;
             }
         }
-        if (!isVotingContact) revert Unauthorized();
+        if (!isVotingContactFound) revert Unauthorized();
         _;
     }
 
-    function setFirstname(string calldata _firstname) external onlyOwner onlyActive {
+    function setFirstname(string memory _firstname) external onlyOwner onlyActive {
         userData.firstname = _firstname;
         userData.lastUpdated = uint64(block.timestamp);
         emit UserProfileUpdated(_firstname, userData.lastname, userData.email, userData.birthDate);
     }
 
-    function setLastname(string calldata _lastname) external onlyOwner onlyActive {
+    function setLastname(string memory _lastname) external onlyOwner onlyActive {
         userData.lastname = _lastname;
         userData.lastUpdated = uint64(block.timestamp);
         emit UserProfileUpdated(userData.firstname, _lastname, userData.email, userData.birthDate);
     }
 
-    function setEmail(string calldata _email) external onlyOwner onlyActive {
+    function setEmail(string memory _email) external onlyOwner onlyActive {
         userData.email = _email;
         userData.lastUpdated = uint64(block.timestamp);
         emit UserProfileUpdated(userData.firstname, userData.lastname, _email, userData.birthDate);
     }
 
-    function setBirthDate(string calldata _birthDate) external onlyOwner onlyActive {
+    function setBirthDate(string memory _birthDate) external onlyOwner onlyActive {
         userData.birthDate = _birthDate;
         userData.lastUpdated = uint64(block.timestamp);
         emit UserProfileUpdated(userData.firstname, userData.lastname, userData.email, _birthDate);
@@ -402,7 +401,49 @@ contract User {
         emit UserStatusChanged(UserStatus.DEAD);
     }
 
-    // View function to get all user data in one call
+    // View function to get basic user data
+    function getBasicUserData() external view returns (
+        address owner,
+        string memory firstname,
+        string memory lastname,
+        string memory email,
+        string memory birthDate,
+        UserStatus status,
+        uint64 graceInterval,
+        uint64 createdAt,
+        uint64 lastUpdated,
+        bool hasVotingRight,
+        bool isIdVerified
+    ) {
+        return (
+            userData.owner,
+            userData.firstname,
+            userData.lastname,
+            userData.email,
+            userData.birthDate,
+            userData.status,
+            userData.graceInterval,
+            userData.createdAt,
+            userData.lastUpdated,
+            userData.hasVotingRight,
+            userData.isIdVerified
+        );
+    }
+
+    // View function to get vaults and contacts
+    function getVaultsAndContacts() external view returns (
+        address[] memory userVaults,
+        address[] memory userContacts
+    ) {
+        return (vaults, contacts);
+    }
+
+    // View function to get death declaration status
+    function getDeathDeclarationStatus() external view returns (bool hasDeathDecl) {
+        return hasDeathDeclaration;
+    }
+
+    // View function to get all user data in one call (simplified)
     function getUserData() external view returns (
         address owner,
         string memory firstname,
