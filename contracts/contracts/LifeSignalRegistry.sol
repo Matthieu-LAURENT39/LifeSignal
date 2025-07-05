@@ -406,6 +406,43 @@ contract LifeSignalRegistry {
         return owners[_owner].contactList;
     }
 
+    /**
+     * @dev Get detailed contact list with all contact information
+     */
+    function getContactListDetails(address _owner) external view returns (
+        address[] memory contactAddresses,
+        string[] memory firstNames,
+        string[] memory lastNames,
+        string[] memory emails,
+        string[] memory phones,
+        bool[] memory hasVotingRights,
+        bool[] memory isVerified
+    ) {
+        address[] memory contactList = owners[_owner].contactList;
+        uint256 length = contactList.length;
+        
+        contactAddresses = new address[](length);
+        firstNames = new string[](length);
+        lastNames = new string[](length);
+        emails = new string[](length);
+        phones = new string[](length);
+        hasVotingRights = new bool[](length);
+        isVerified = new bool[](length);
+        
+        for (uint256 i = 0; i < length; i++) {
+            address contactAddr = contactList[i];
+            Contact storage contact = contacts[_owner][contactAddr];
+            
+            contactAddresses[i] = contact.addr;
+            firstNames[i] = contact.firstName;
+            lastNames[i] = contact.lastName;
+            emails[i] = contact.email;
+            phones[i] = contact.phone;
+            hasVotingRights[i] = contact.hasVotingRight;
+            isVerified[i] = contact.isVerified;
+        }
+    }
+
     function hasVoted(address _owner, address _voter) external view returns (bool) {
         return deathDeclarations[_owner].hasVoted[_voter];
     }
@@ -573,6 +610,46 @@ contract LifeSignalRegistry {
      */
     function getOwnerVaultList(address _owner) external view returns (uint256[] memory) {
         return owners[_owner].vaultList;
+    }
+
+    /**
+     * @dev Get detailed vault list with all vault information
+     */
+    function getOwnerVaultListDetails(address _owner) external view returns (
+        uint256[] memory vaultIds,
+        string[] memory names,
+        address[] memory vaultOwners,
+        bool[] memory isReleased,
+        string[] memory cypherIvs,
+        string[] memory encryptionKeys,
+        uint256[][] memory fileIds,
+        address[][] memory authorizedContacts
+    ) {
+        uint256[] memory vaultList = owners[_owner].vaultList;
+        uint256 length = vaultList.length;
+        
+        vaultIds = new uint256[](length);
+        names = new string[](length);
+        vaultOwners = new address[](length);
+        isReleased = new bool[](length);
+        cypherIvs = new string[](length);
+        encryptionKeys = new string[](length);
+        fileIds = new uint256[][](length);
+        authorizedContacts = new address[][](length);
+        
+        for (uint256 i = 0; i < length; i++) {
+            uint256 vaultId = vaultList[i];
+            Vault storage vault = vaults[vaultId];
+            
+            vaultIds[i] = vault.id;
+            names[i] = vault.name;
+            vaultOwners[i] = vault.owner;
+            isReleased[i] = vault.isReleased;
+            cypherIvs[i] = vault.cypherIv;
+            encryptionKeys[i] = vault.encryptionKey;
+            fileIds[i] = vault.fileIds;
+            authorizedContacts[i] = vault.authorizedContacts;
+        }
     }
 
     /**

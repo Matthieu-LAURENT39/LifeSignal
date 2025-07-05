@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
 import { useLifeSignalRegistryWrite, contractUtils, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import { useReadContract } from 'wagmi';
-import type { Vault, VaultFile, User } from '../types/models';
+import type { Vault, VaultFile, Contact } from '../types/models';
 
 interface VaultManagerProps {
   className?: string;
@@ -103,7 +103,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
   const [showCreateVault, setShowCreateVault] = useState(false);
   const [showAddFile, setShowAddFile] = useState(false);
   const [showAuthorizeContact, setShowAuthorizeContact] = useState(false);
-  const [availableContacts, setAvailableContacts] = useState<User[]>([]);
+  const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
   
   // File upload states
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -114,18 +114,17 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
   // Form states
   const [newVault, setNewVault] = useState({
     name: '',
-    vaultId: '',
     encryptionKey: '',
     iv: ''
   });
 
   const [contactToAuthorize, setContactToAuthorize] = useState('');
 
-  // Get owner's vault list using wagmi v2 hooks
-  const { data: vaultList, error: vaultListError } = useReadContract({
+  // Get detailed vault list using wagmi v2 hooks
+  const { data: vaultListDetails, error: vaultListDetailsError } = useReadContract({
     address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
     abi: LIFESIGNAL_REGISTRY_ABI,
-    functionName: 'getOwnerVaultList',
+    functionName: 'getOwnerVaultListDetails',
     args: address ? [address] : undefined,
     query: {
       enabled: !!address && isConnected,
@@ -136,43 +135,60 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
   console.log('VaultManager state:', { 
     isConnected, 
     address, 
-    vaultList, 
-    vaultListError,
+    vaultListDetails, 
+    vaultListDetailsError,
     vaults: vaults.length 
   });
 
   // Load vault details when vault list is available
   useEffect(() => {
-    if (!vaultList || vaultList.length === 0) {
+    if (!vaultListDetails || !Array.isArray(vaultListDetails) || vaultListDetails.length < 8) {
       setVaults([]);
       setIsLoading(false);
       return;
     }
 
-    // For now, create simple vault objects with basic info
-    // In a real implementation, you'd need to create individual hooks for each vault
-    const vaultDetails: Vault[] = vaultList.map((vaultId: string, index: number) => ({
-      id: vaultId,
-      name: `Vault ${index + 1}`,
-      owner: address || '',
-      files: [],
-      contacts: [],
-      isReleased: false,
+    // vaultListDetails is an array: [vaultIds, names, vaultOwners, isReleased, cypherIvs, encryptionKeys, fileIds, authorizedContacts]
+    const vaultIds = vaultListDetails[0] as readonly bigint[];
+    const names = vaultListDetails[1] as readonly string[];
+    const vaultOwners = vaultListDetails[2] as readonly string[];
+    const isReleased = vaultListDetails[3] as readonly boolean[];
+    const cypherIvs = vaultListDetails[4] as readonly string[];
+    const encryptionKeys = vaultListDetails[5] as readonly string[];
+    const fileIds = vaultListDetails[6] as readonly (readonly bigint[])[];
+    const authorizedContacts = vaultListDetails[7] as readonly (readonly string[])[];
+
+    if (!vaultIds || vaultIds.length === 0) {
+      setVaults([]);
+      setIsLoading(false);
+      return;
+    }
+
+    // Create vault objects with real data from blockchain
+    const vaultDetails: Vault[] = vaultIds.map((vaultId: bigint, index: number) => ({
+      id: vaultId.toString(),
+      name: names?.[index] || `Vault ${index + 1}`,
+      owner: vaultOwners?.[index] || address || '',
+      files: [], // Would need to fetch individual file details
+      contacts: [], // Would need to fetch individual contact details
+      isReleased: isReleased?.[index] || false,
       cypher: {
-        iv: 'placeholder',
-        encryptionKey: 'placeholder'
-      }
+        iv: cypherIvs?.[index] || 'placeholder',
+        encryptionKey: encryptionKeys?.[index] || 'placeholder'
+      },
+      // Store the authorized contacts count for display
+      authorizedContactsCount: authorizedContacts?.[index]?.length || 0
     }));
 
     setVaults(vaultDetails);
     setIsLoading(false);
-  }, [vaultList, address]);
+  }, [vaultListDetails, address]);
 
-  // Get available contacts using wagmi v2 hooks
-  const { data: contactList, error: contactListError } = useReadContract({
+  // Get detailed contact list using wagmi v2 hooks
+  const { data: contactListDetails, error: contactListDetailsError } = useReadContract({
     address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
     abi: LIFESIGNAL_REGISTRY_ABI,
-    functionName: 'getContactList',
+    functionName: 'getContactListDetails',
     args: address ? [address] : undefined,
     query: {
       enabled: !!address && isConnected,
@@ -181,23 +197,53 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
 
   // Load contact details when contact list is available
   useEffect(() => {
-    if (!contactList || contactList.length === 0) {
+    if (!contactListDetails || !Array.isArray(contactListDetails) || contactListDetails.length < 7) {
       setAvailableContacts([]);
       return;
     }
 
-    // For now, create simple contact objects
-    // In a real implementation, you'd need to create individual hooks for each contact
-    const contacts: User[] = contactList.map((contactAddr: string, index: number) => ({
+    // contactListDetails is an array: [contactAddresses, firstNames, lastNames, emails, phones, hasVotingRights, isVerified]
+    const contactAddresses = contactListDetails[0] as string[];
+    const firstNames = contactListDetails[1] as string[];
+    const lastNames = contactListDetails[2] as string[];
+    const emails = contactListDetails[3] as string[];
+    const phones = contactListDetails[4] as string[];
+    const hasVotingRights = contactListDetails[5] as boolean[];
+    const isVerified = contactListDetails[6] as boolean[];
+
+    if (!contactAddresses || contactAddresses.length === 0) {
+      setAvailableContacts([]);
+      return;
+    }
+
+    // Create contact objects with real data from blockchain
+    const contacts: Contact[] = contactAddresses.map((contactAddr: string, index: number) => ({
       id: contactAddr,
       address: contactAddr,
-      firstName: `Contact`,
-      lastName: contactAddr.slice(0, 6) + '...' + contactAddr.slice(-4),
-      isIdVerified: true // Placeholder
+      firstName: firstNames?.[index] || `Contact ${index + 1}`,
+      lastName: lastNames?.[index] || '',
+      email: emails?.[index] || 'contact@example.com',
+      phone: phones?.[index] || '+1234567890',
+      isIdVerified: isVerified?.[index] || false,
+      hasVotingRight: hasVotingRights?.[index] || false,
+      vaults: [],
+      owner: {
+        id: address || '',
+        address: address || '',
+        firstName: 'Owner',
+        lastName: '',
+        status: 'active' as const,
+        graceInterval: 30,
+        deathDeclaration: null,
+        hasVotingRight: false,
+        isIdVerified: true,
+        vaults: [],
+        contacts: []
+      }
     }));
 
     setAvailableContacts(contacts);
-  }, [contactList]);
+  }, [contactListDetails]);
 
   const handleCreateVault = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,11 +258,11 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
         abi: LIFESIGNAL_REGISTRY_ABI,
         functionName: 'createVault',
-        args: [newVault.vaultId as `0x${string}`, newVault.name, iv, encryptionKey],
+        args: [newVault.name, iv, encryptionKey],
       });
 
       setShowCreateVault(false);
-      setNewVault({ name: '', vaultId: '', encryptionKey: '', iv: '' });
+      setNewVault({ name: '', encryptionKey: '', iv: '' });
       
       // Reload vaults after a delay
       setTimeout(() => {
@@ -295,7 +341,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
             address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
             abi: LIFESIGNAL_REGISTRY_ABI,
             functionName: 'addVaultFile',
-            args: [selectedVault.id as `0x${string}`, fileId, file.name, file.type, blobId, new Date().toISOString()],
+            args: [BigInt(selectedVault.id), file.name, file.type, blobId, new Date().toISOString()],
           });
 
           console.log(`File ${file.name} uploaded successfully with Blob ID: ${blobId}`);
@@ -331,7 +377,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
         abi: LIFESIGNAL_REGISTRY_ABI,
         functionName: 'authorizeVaultContact',
-        args: [selectedVault.id as `0x${string}`, contactToAuthorize as `0x${string}`],
+        args: [BigInt(selectedVault.id), contactToAuthorize as `0x${string}`],
       });
 
       setShowAuthorizeContact(false);
@@ -360,7 +406,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
         abi: LIFESIGNAL_REGISTRY_ABI,
         functionName: 'releaseVault',
-        args: [vaultId as `0x${string}`],
+        args: [BigInt(vaultId)],
       });
       
       // Reload vaults after a delay
@@ -445,7 +491,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
                 </div>
                 <div className="flex items-center text-white/60 text-sm">
                   <span className="w-20">Contacts:</span>
-                  <span>{vault.contacts?.length || 0}</span>
+                  <span>{vault.authorizedContactsCount || 0}</span>
                 </div>
                 <div className="flex items-center text-white/60 text-sm">
                   <span className="w-20">Files:</span>
@@ -525,20 +571,6 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-white/80 text-sm font-medium mb-2">
-                    Vault ID (Wallet Address)
-                  </label>
-                  <input
-                    type="text"
-                    value={newVault.vaultId}
-                    onChange={(e) => setNewVault(prev => ({ ...prev, vaultId: e.target.value }))}
-                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                    placeholder="0x..."
-                    required
-                  />
-                </div>
-
                 <div className="flex gap-4 pt-4">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
@@ -554,7 +586,7 @@ export default function VaultManager({ className = '' }: VaultManagerProps) {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     type="submit"
-                    disabled={isPending || !newVault.name || !newVault.vaultId}
+                    disabled={isPending || !newVault.name}
                     className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isPending ? 'Creating...' : 'Create Vault'}

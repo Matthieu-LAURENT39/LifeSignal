@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
-import "../LifeSignalRegistry.sol";
+import "./LifeSignalRegistry.sol";
 
 contract GracePeriodAutomation is AutomationCompatibleInterface {
     LifeSignalRegistry public registry;

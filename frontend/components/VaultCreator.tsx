@@ -4,19 +4,19 @@ import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAccount } from 'wagmi';
 import { useLifeSignalRegistryWrite, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
-import type { User, VaultFile } from '../types/models';
+import type { User, VaultFile, Contact } from '../types/models';
 
 interface VaultCreatorProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: {
+  onSubmit: (vault: {
     name: string;
     files: File[];
     selectedContacts: string[];
     encryptionKey: string;
     encryptedFiles: { name: string; data: ArrayBuffer }[];
   }) => void;
-  availableContacts: User[];
+  availableContacts: Contact[];
 }
 
 type Step = 'name' | 'files' | 'contacts';
@@ -123,7 +123,6 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
   console.log('VaultCreator state:', { isConnected, address, writeContract, isPending, writeError });
   
   const [name, setName] = useState('');
-  const [vaultId, setVaultId] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [step, setStep] = useState<Step>('name');
@@ -161,7 +160,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       alert('Please select at least one file');
       return;
     }
-
+    
     try {
       setIsCreating(true);
       setIsEncrypting(true);
@@ -210,10 +209,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       const cypherIV = Math.random().toString(36).substring(2, 18); // 16 character random string
       const blockchainEncryptionKey = Math.random().toString(36).substring(2, 34); // 32 character random string
       
-      const vaultIdToUse = vaultId || address;
-      
       console.log('Creating vault with:', {
-        vaultId: vaultIdToUse,
         name,
         cypherIV,
         encryptionKey: blockchainEncryptionKey.substring(0, 8) + '...' // Log partial key for security
@@ -230,14 +226,14 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       }
       
       // Call writeContract directly to trigger MetaMask popup
-      console.log('About to call writeContract with args:', [vaultIdToUse, name, cypherIV, blockchainEncryptionKey]);
+      console.log('About to call writeContract with args:', [name, cypherIV, blockchainEncryptionKey]);
       
       try {
         const result = await writeContract({
           address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
           abi: LIFESIGNAL_REGISTRY_ABI,
           functionName: 'createVault',
-          args: [vaultIdToUse as `0x${string}`, name, cypherIV, blockchainEncryptionKey],
+          args: [name, cypherIV, blockchainEncryptionKey],
         });
 
         console.log('Vault creation transaction result:', result);
@@ -280,7 +276,6 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       
       // Reset form
       setName('');
-      setVaultId('');
       setFiles([]);
       setSelectedContacts([]);
       setStep('name');
@@ -347,22 +342,6 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
                 placeholder="e.g. Family Documents"
                 required
               />
-            </div>
-            
-            <div>
-              <label className="block text-white/80 text-sm font-medium mb-2">
-                Vault ID (Wallet Address)
-              </label>
-              <input
-                type="text"
-                value={vaultId}
-                onChange={(e) => setVaultId(e.target.value)}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                placeholder="0x... (optional, will use your wallet address if empty)"
-              />
-              <p className="text-white/40 text-xs mt-1">
-                Leave empty to use your wallet address as the vault ID
-              </p>
             </div>
             
             <div className="flex justify-end mt-6">

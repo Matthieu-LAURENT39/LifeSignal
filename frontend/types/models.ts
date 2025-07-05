@@ -11,12 +11,13 @@ export interface Vault {
   name: string;
   owner: string; // address
   files?: VaultFile[];
-  contacts?: User[];
+  contacts?: Contact[];
   isReleased: boolean;
   cypher: {
     iv: string;
     encryptionKey: string;
   };
+  authorizedContactsCount?: number;
 }
 
 export interface User {
@@ -33,6 +34,7 @@ export interface User {
 export interface Contact extends User {
   hasVotingRight: boolean;
   vaults?: Vault[];
+  authorizedVaultCount?: number;
   owner: Owner;
 }
 
@@ -50,7 +52,7 @@ export interface Owner extends User {
     consensusReachedAt?: string;
   } | null;
   vaults?: Vault[];
-  contacts?: User[];
+  contacts?: Contact[];
 }
 
 // Circular type references require TypeScript's type merging.

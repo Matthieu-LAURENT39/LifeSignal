@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/home/mathis/projects/web3/LifeSignal/contracts/contracts/LifeSignalRegistry.sol": {
-      "lastModificationDate": 1751744581414,
-      "contentHash": "a0227adacb3057fcb4d8742117ab98ca",
+      "lastModificationDate": 1751749641830,
+      "contentHash": "18828eb9128d583404e0719489df7fad",
       "sourceName": "contracts/LifeSignalRegistry.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -71,44 +71,6 @@
       ],
       "artifacts": [
         "Sapphire"
-      ]
-    },
-    "/home/mathis/projects/web3/LifeSignal/contracts/contracts/automations/GracePeriodAutomation.sol": {
-      "lastModificationDate": 1751741897989,
-      "contentHash": "b62dd1ff8977259227207dad064bff0d",
-      "sourceName": "contracts/automations/GracePeriodAutomation.sol",
-      "solcConfig": {
-        "version": "0.8.19",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol",
-        "../LifeSignalRegistry.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.19"
-      ],
-      "artifacts": [
-        "GracePeriodAutomation"
       ]
     },
     "/home/mathis/projects/web3/LifeSignal/node_modules/@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol": {
@@ -217,6 +179,44 @@
       ],
       "artifacts": [
         "AutomationCompatibleInterface"
+      ]
+    },
+    "/home/mathis/projects/web3/LifeSignal/contracts/contracts/GracePeriodAutomation.sol": {
+      "lastModificationDate": 1751748385257,
+      "contentHash": "e472ecc180aff32259ccc6fffe4d3ea4",
+      "sourceName": "contracts/GracePeriodAutomation.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol",
+        "./LifeSignalRegistry.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "GracePeriodAutomation"
       ]
     }
   }

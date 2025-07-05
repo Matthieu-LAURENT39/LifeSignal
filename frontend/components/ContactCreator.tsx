@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { useAccount } from 'wagmi';
+import { useLifeSignalRegistryWrite, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import type { Vault } from '../types/models';
 
 interface ContactCreatorProps {
@@ -18,6 +20,9 @@ interface ContactCreatorProps {
 }
 
 export default function ContactCreator({ isOpen, onClose, onSubmit, availableVaults }: ContactCreatorProps) {
+  const { address, isConnected } = useAccount();
+  const { writeContract, isPending, error: writeError } = useLifeSignalRegistryWrite();
+  
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -26,6 +31,7 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
   const [hasVotingRight, setHasVotingRight] = useState(false);
   const [selectedVaultAddresses, setSelectedVaultAddresses] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -53,10 +59,51 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (validateForm()) {
+    if (!validateForm()) return;
+    
+    if (!isConnected || !address || !writeContract) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      // Convert selected vault addresses to bigint (vault IDs)
+      const authorizedVaults = selectedVaultAddresses.map(vaultId => BigInt(vaultId));
+      
+      console.log('Calling addContact with:', {
+        contact: contactAddress,
+        firstName,
+        lastName,
+        email,
+        phone,
+        hasVotingRight,
+        authorizedVaults
+      });
+
+      // Call the smart contract
+      const result = await writeContract({
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFESIGNAL_REGISTRY_ABI,
+        functionName: 'addContact',
+        args: [
+          contactAddress as `0x${string}`,
+          firstName,
+          lastName,
+          email,
+          phone,
+          hasVotingRight,
+          authorizedVaults
+        ],
+      });
+
+      console.log('Contact creation transaction result:', result);
+      
+      // Call the original onSubmit for UI updates
       onSubmit({
         firstName,
         lastName,
@@ -77,6 +124,36 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
       setSelectedVaultAddresses([]);
       setErrors({});
       onClose();
+      
+    } catch (error) {
+      console.error('Error creating contact:', error);
+      
+      // Handle specific error types
+      let errorMessage = 'Failed to create contact. Please try again.';
+      
+      if (error instanceof Error) {
+        const errorStr = error.message.toLowerCase();
+        
+        if (errorStr.includes('owner not registered')) {
+          errorMessage = 'You must register as an owner first before adding contacts.';
+        } else if (errorStr.includes('contact already exists')) {
+          errorMessage = 'This contact address is already registered.';
+        } else if (errorStr.includes('cannot add yourself')) {
+          errorMessage = 'You cannot add yourself as a contact.';
+        } else if (errorStr.includes('user rejected') || errorStr.includes('user denied')) {
+          errorMessage = 'Transaction was cancelled by user.';
+        } else if (errorStr.includes('insufficient funds') || errorStr.includes('gas')) {
+          errorMessage = 'Insufficient funds for transaction. Please check your wallet balance.';
+        } else if (errorStr.includes('network') || errorStr.includes('connection')) {
+          errorMessage = 'Network connection error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -144,13 +221,13 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
 
           <div>
             <label className="block text-white/80 text-sm mb-2">Email</label>
-            <input
+                <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={`w-full px-4 py-2 bg-white/5 border ${errors.email ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
               placeholder="john@example.com"
-            />
+                />
             {errors.email && (
               <p className="text-red-400 text-xs mt-1">{errors.email}</p>
             )}
@@ -158,17 +235,17 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
 
           <div>
             <label className="block text-white/80 text-sm mb-2">Phone</label>
-            <input
+                <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className={`w-full px-4 py-2 bg-white/5 border ${errors.phone ? 'border-red-500/50' : 'border-white/20'} rounded-xl text-white focus:outline-none focus:border-white/40`}
               placeholder="+1234567890"
-            />
+                />
             {errors.phone && (
               <p className="text-red-400 text-xs mt-1">{errors.phone}</p>
             )}
-          </div>
+            </div>
 
           <div>
             <label className="block text-white/80 text-sm mb-2">Contact Address</label>
@@ -241,15 +318,17 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors"
+              disabled={isSubmitting || isPending}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+              disabled={isSubmitting || isPending}
+              className="px-6 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Add Contact
+              {isSubmitting || isPending ? 'Adding Contact...' : 'Add Contact'}
             </button>
           </div>
         </form>

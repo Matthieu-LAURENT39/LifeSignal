@@ -20,13 +20,22 @@ export default function UserPortal() {
     'getOwnerInfo', 
     address ? [address] : undefined, 
     {
+    enabled: !!address && isConnected,
+    }
+  );
+  
+  // Get detailed vault list from blockchain
+  const { data: vaultListDetails, error: vaultListDetailsError, isLoading: vaultListDetailsLoading } = useLifeSignalRegistryRead(
+    'getOwnerVaultListDetails',
+    address ? [address] : undefined,
+    {
       enabled: !!address && isConnected,
     }
   );
   
-  // Get owner's vault list from blockchain
-  const { data: vaultList, error: vaultListError, isLoading: vaultListLoading } = useLifeSignalRegistryRead(
-    'getOwnerVaultList',
+  // Get detailed contact list from blockchain
+  const { data: contactListDetails, error: contactListDetailsError, isLoading: contactListDetailsLoading } = useLifeSignalRegistryRead(
+    'getContactListDetails',
     address ? [address] : undefined,
     {
       enabled: !!address && isConnected && !!ownerInfo && (ownerInfo as any)[5], // exists is the 6th element
@@ -44,8 +53,60 @@ export default function UserPortal() {
   const [showAliveConfirm, setShowAliveConfirm] = useState(false);
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   const [showRegistration, setShowRegistration] = useState(false);
+
   const searchParams = useSearchParams();
   const isDebugMode = searchParams.get('debug') === 'true';
+
+  // State to store fetched contact details
+  const [contactDetails, setContactDetails] = useState<Record<string, any>>({});
+  const [isLoadingContactDetails, setIsLoadingContactDetails] = useState(false);
+
+  // Function to fetch contact details for all contacts
+  const fetchContactDetails = async (contactAddresses: string[]) => {
+    if (!contactAddresses || contactAddresses.length === 0) return;
+    
+    setIsLoadingContactDetails(true);
+    const details: Record<string, any> = {};
+
+    try {
+      for (const contactAddr of contactAddresses) {
+        try {
+          const contactInfo = await contractUtils.getContactInfo(
+            // We need to pass a readContract function here
+            // For now, we'll use the useLifeSignalRegistryRead hook pattern
+            null as any, // This should be the readContract function
+            address!,
+            contactAddr
+          );
+          
+          if (contactInfo) {
+            details[contactAddr] = contactInfo;
+          }
+        } catch (error) {
+          console.error(`Error fetching details for contact ${contactAddr}:`, error);
+        }
+      }
+      
+      setContactDetails(details);
+    } catch (error) {
+      console.error('Error fetching contact details:', error);
+    } finally {
+      setIsLoadingContactDetails(false);
+    }
+  };
+
+  // Custom hook to fetch contact details
+  const useContactDetail = (contactAddress: string) => {
+    return useLifeSignalRegistryRead(
+      'getContactInfo',
+      address && contactAddress ? [address, contactAddress] : undefined,
+      {
+        enabled: !!address && !!contactAddress && isConnected,
+      }
+    );
+  };
+
+
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -54,13 +115,13 @@ export default function UserPortal() {
     }
 
     // Check registration status based on contract data
-    if (ownerLoading || vaultListLoading) {
+    if (ownerLoading || vaultListDetailsLoading || contactListDetailsLoading) {
       setIsLoading(true);
       return;
     }
 
-    if (ownerError || vaultListError) {
-      console.error('Error checking registration:', ownerError || vaultListError);
+    if (ownerError || vaultListDetailsError || contactListDetailsError) {
+      console.error('Error checking registration:', ownerError || vaultListDetailsError || contactListDetailsError);
       setIsRegistered(false);
       setIsLoading(false);
       return;
@@ -71,13 +132,15 @@ export default function UserPortal() {
       const [firstName, lastName, lastHeartbeat, graceInterval, isDeceased, exists] = ownerInfo as [string, string, bigint, bigint, boolean, boolean];
       
       console.log('Owner info from contract:', { firstName, lastName, exists, isDeceased, lastHeartbeat, graceInterval });
+      console.log('Contact list details from contract:', contactListDetails);
+      console.log('Vault list details from contract:', vaultListDetails);
       
       if (exists) {
         console.log('User is already registered:', { firstName, lastName, exists, isDeceased });
         setIsRegistered(true);
         
         // Build user data from blockchain data
-        const userData = buildUserDataFromBlockchain(address, firstName, lastName, vaultList || [], Number(graceInterval || 30));
+        const userData = buildUserDataFromBlockchain(address, firstName, lastName, vaultListDetails, Number(graceInterval || 30), contactListDetails);
         setCurrentUser(userData);
       } else {
         console.log('User is not registered - exists is false');
@@ -89,23 +152,122 @@ export default function UserPortal() {
     }
     
     setIsLoading(false);
-  }, [isConnected, address, ownerInfo, ownerError, ownerLoading, vaultList, vaultListError, vaultListLoading]);
+  }, [isConnected, address, ownerInfo, ownerError, ownerLoading, vaultListDetails, vaultListDetailsError, vaultListDetailsLoading, contactListDetails, contactListDetailsError, contactListDetailsLoading]);
+
+  // Function to get contact display data
+  const getContactDisplayData = (contactAddr: string, index: number) => {
+    // Check if we have contact details for this address
+    const contactDetail = contactDetails[contactAddr];
+    console.log("getContactDisplayData")
+    console.log(contactDetail)
+    if (contactDetail) {
+      // Return real contact data from blockchain
+      return {
+        firstName: contactDetail.firstName || `Contact ${index + 1}`,
+        lastName: contactDetail.lastName || '',
+        email: contactDetail.email || 'contact@example.com',
+        phone: contactDetail.phone || '+1234567890',
+        hasVotingRight: contactDetail.hasVotingRight || false,
+        isIdVerified: contactDetail.isVerified || false
+      };
+    } else {
+      // Return placeholder data
+      return {
+        firstName: `Contact`,
+        lastName: `${index + 1}`,
+        email: 'contact@example.com',
+        phone: '+1234567890',
+        hasVotingRight: false,
+        isIdVerified: false
+      };
+    }
+  };
 
   // Function to build user data from blockchain data
-  const buildUserDataFromBlockchain = (ownerAddr: string, firstName: string, lastName: string, vaultAddresses: string[], graceIntervalDays: number = 30): Owner => {
-    // Create vault objects from blockchain addresses
-    const vaults: Vault[] = vaultAddresses.map((vaultAddr, index) => ({
-      id: vaultAddr,
-      name: `Vault ${index + 1}`, // In a real app, you'd fetch the actual vault name
-      owner: ownerAddr,
-      files: [],
-      contacts: [],
-      isReleased: false,
-      cypher: {
-        iv: 'placeholder',
-        encryptionKey: 'placeholder'
+  const buildUserDataFromBlockchain = (ownerAddr: string, firstName: string, lastName: string, vaultDetails: any, graceIntervalDays: number = 30, contactDetails: any): Owner => {
+    // Create vault objects from detailed vault data
+    let vaults: Vault[] = [];
+    
+    if (vaultDetails && Array.isArray(vaultDetails) && vaultDetails.length >= 8) {
+      // vaultDetails is an array: [vaultIds, names, owners, isReleased, cypherIvs, encryptionKeys, fileIds, authorizedContacts]
+      const vaultIds = vaultDetails[0] as string[];
+      const names = vaultDetails[1] as string[];
+      const owners = vaultDetails[2] as string[];
+      const isReleased = vaultDetails[3] as boolean[];
+      const cypherIvs = vaultDetails[4] as string[];
+      const encryptionKeys = vaultDetails[5] as string[];
+      const fileIds = vaultDetails[6] as string[][];
+      const authorizedContacts = vaultDetails[7] as string[][];
+      
+      if (vaultIds && Array.isArray(vaultIds)) {
+        vaults = vaultIds.map((vaultId: string, index: number) => ({
+          id: vaultId,
+          name: names?.[index] || `Vault ${index + 1}`,
+          owner: owners?.[index] || ownerAddr,
+          files: [], // Would need to fetch individual file details
+          contacts: [], // Would need to fetch individual contact details
+          isReleased: isReleased?.[index] || false,
+          cypher: {
+            iv: cypherIvs?.[index] || 'placeholder',
+            encryptionKey: encryptionKeys?.[index] || 'placeholder'
+          }
+        }));
       }
-    }));
+    }
+
+    // Create contact objects from detailed contact data
+    let contacts: Contact[] = [];
+    
+    if (contactDetails && Array.isArray(contactDetails) && contactDetails.length >= 7) {
+      // contactDetails is an array: [contactAddresses, firstNames, lastNames, emails, phones, hasVotingRights, isVerified]
+      const contactAddresses = contactDetails[0] as string[];
+      const firstNames = contactDetails[1] as string[];
+      const lastNames = contactDetails[2] as string[];
+      const emails = contactDetails[3] as string[];
+      const phones = contactDetails[4] as string[];
+      const hasVotingRights = contactDetails[5] as boolean[];
+      const isVerified = contactDetails[6] as boolean[];
+      
+      if (contactAddresses && Array.isArray(contactAddresses)) {
+        contacts = contactAddresses.map((contactAddr: string, index: number) => {
+          // Calculate how many vaults this contact is authorized for
+          let authorizedVaultCount = 0;
+          if (vaultDetails && Array.isArray(vaultDetails) && vaultDetails.length >= 8) {
+            const authorizedContacts = vaultDetails[7] as string[][];
+            // Count vaults where this contact is in the authorized contacts list
+            authorizedVaultCount = authorizedContacts.filter(contactList => 
+              contactList.includes(contactAddr)
+            ).length;
+          }
+
+          return {
+            id: contactAddr,
+            address: contactAddr,
+            firstName: firstNames?.[index] || `Contact ${index + 1}`,
+            lastName: lastNames?.[index] || '',
+            email: emails?.[index] || 'contact@example.com',
+            phone: phones?.[index] || '+1234567890',
+            hasVotingRight: hasVotingRights?.[index] || false,
+            isIdVerified: isVerified?.[index] || false,
+            vaults: [], // Would need to fetch from contract
+            authorizedVaultCount, // Store the count for display
+            owner: {
+              id: ownerAddr,
+              address: ownerAddr,
+              firstName,
+              lastName,
+              status: 'active' as const,
+              graceInterval: graceIntervalDays,
+              deathDeclaration: null,
+              hasVotingRight: false,
+              isIdVerified: true,
+              vaults,
+              contacts: []
+            }
+          } as Contact;
+        });
+      }
+    }
 
     // Create the owner object
     const owner: Owner = {
@@ -121,7 +283,7 @@ export default function UserPortal() {
       hasVotingRight: false,
       isIdVerified: true,
       vaults,
-      contacts: [] // Will be populated when contacts are added
+      contacts
     };
 
     return owner;
@@ -131,7 +293,7 @@ export default function UserPortal() {
     setShowRegistration(false);
     setIsRegistered(true);
     // Load user data after registration - will be handled by the useEffect when ownerInfo updates
-    setIsLoading(false);
+      setIsLoading(false);
   };
 
   // Calculate real statistics
@@ -167,16 +329,17 @@ export default function UserPortal() {
     if (!currentUser || !address) return;
 
     // Create a new vault object for the UI
+    // Note: The actual vault ID will be returned from the contract, but for now we'll use a placeholder
     const newVault: Vault = {
-      id: address, // Use the user's address as vault ID for now
+      id: `vault_${Date.now()}`, // Placeholder ID - in real implementation, this would come from the contract
       name,
       owner: address,
       files: encryptedFiles.map((file, index) => ({
         id: `f${Date.now()}_${index}`,
-        originalName: file.name,
+      originalName: file.name,
         mimeType: files[index]?.type || 'application/octet-stream',
-        cid: `QmXr…${Math.random().toString(36).substr(2, 6)}`,
-        uploadDate: new Date().toISOString()
+      cid: `QmXr…${Math.random().toString(36).substr(2, 6)}`,
+      uploadDate: new Date().toISOString()
       })),
       contacts: currentUser.contacts?.filter(c => selectedContacts.includes(c.id)) || [],
       isReleased: false,
@@ -287,48 +450,45 @@ export default function UserPortal() {
         email,
         phone,
         hasVotingRight,
-        selectedVaultAddresses
+        selectedVaultAddresses.map(vaultId => BigInt(vaultId))
       );
       
       console.log('Contact created successfully:', hash);
       
-      // Update local state to reflect the new contact
-      if (currentUser) {
-        const newContact: Contact = {
-          id: contactAddress,
-          firstName,
-          lastName,
-          email,
-          phone,
-          hasVotingRight,
-          isIdVerified: false,
-          vaults: selectedVaultAddresses.map(id => ({
-            id,
-            name: 'Vault',
-            owner: address,
-            files: [],
-            contacts: [],
-            isReleased: false,
-            cypher: {
-              iv: 'placeholder',
-              encryptionKey: 'placeholder'
-            }
-          })),
-          owner: address
-        };
-        
-        setCurrentUser(prev => {
-          if (!prev || !prev.contacts) return prev;
-          return {
-            ...prev,
-            contacts: [...(prev.contacts || []), newContact]
-          };
-        });
-      }
+      // The contact will be automatically added to the blockchain data when it refreshes
+      // No need to manually update local state since the useEffect will rebuild the data
+      console.log('Contact created successfully on blockchain');
       
     } catch (error) {
       console.error('Error creating contact:', error);
     }
+  };
+
+  // Component to render a contact row with fetched details
+  const ContactRow = ({ contact, index }: { contact: Contact; index: number }) => {
+    return (
+      <tr className={index % 2 ? 'bg-white/5' : ''}>
+        <td className="py-3 px-4 text-center">
+          {contact.isIdVerified ? '✔️' : '❌'}
+        </td>
+        <td className="py-3 px-4 whitespace-nowrap">
+          {`${contact.firstName} ${contact.lastName}`}
+        </td>
+        <td className="py-3 px-4 text-sm">
+          {contact.email || 'No email'}
+        </td>
+        <td className="py-3 px-4 text-sm">
+          {contact.phone || 'No phone'}
+        </td>
+        <td className="py-3 px-4 font-mono">
+          {contact.address ? `${contact.address.slice(0,6)}…${contact.address.slice(-4)}` : 'No address'}
+        </td>
+        <td className="py-3 px-4 text-center">
+          {contact.hasVotingRight ? <span className="text-green-400">Yes</span> : <span className="text-gray-400">No</span>}
+        </td>
+        <td className="py-3 px-4 text-center">{contact.authorizedVaultCount ?? 0}</td>
+      </tr>
+    );
   };
 
   if (isLoading) {
@@ -621,30 +781,40 @@ export default function UserPortal() {
                     <tr>
                       <th className="py-3 px-4 text-center">ID Verified</th>
                       <th className="py-3 px-4 text-left">Name</th>
+                      <th className="py-3 px-4 text-left">Email</th>
+                      <th className="py-3 px-4 text-left">Phone</th>
                       <th className="py-3 px-4 text-left">Address</th>
                       <th className="py-3 px-4 text-center">Voting</th>
                       <th className="py-3 px-4 text-center">Vaults</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {currentUser?.contacts?.map((contact, idx) => {
-                      const typedContact = contact as Contact;
+                    {(() => {
+                      // Display blockchain contacts
+                      const contacts = currentUser?.contacts || [];
+                      
+                      if (contacts.length > 0) {
+                        return contacts.map((contact, idx) => (
+                          <ContactRow key={contact.id} contact={contact} index={idx} />
+                        ));
+                      } else {
                       return (
-                        <tr key={contact.id} className={idx % 2 ? 'bg-white/5' : ''}>
-                          <td className="py-3 px-4 text-center">
-                            {contact.isIdVerified ? '✔️' : '❌'}
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-white/60">
+                              <div className="flex flex-col items-center gap-2">
+                                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                  </svg>
+                                </div>
+                                <p>No contacts found</p>
+                                <p className="text-sm">Add your first contact to start building your digital inheritance network</p>
+                              </div>
                           </td>
-                          <td className="py-3 px-4 whitespace-nowrap">{contact.firstName} {contact.lastName}</td>
-                          <td className="py-3 px-4 font-mono">
-                            {contact.address ? `${contact.address.slice(0,6)}…${contact.address.slice(-4)}` : 'No address'}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            {typedContact.hasVotingRight ? <span className="text-green-400">Yes</span> : <span className="text-gray-400">No</span>}
-                          </td>
-                          <td className="py-3 px-4 text-center">{typedContact.vaults?.length ?? 0}</td>
                         </tr>
                       );
-                    })}
+                      }
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -817,7 +987,7 @@ export default function UserPortal() {
       {/* Debug logging for vault data */}
       {isDebugMode && currentUser && (
         <div style={{ display: 'none' }}>
-          {console.log('ContactCreator availableVaults:', currentUser.vaults)}
+          {/* Debug info would go here */}
         </div>
       )}
 
