@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
 
-contract LifeSignal is AutomationCompatibleInterface {
+contract RegularLifeSignal is AutomationCompatibleInterface {
     address public user;
     uint256 public lastPing;
     uint256 public interval;     // Intervalle de vérification
