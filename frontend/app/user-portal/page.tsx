@@ -136,6 +136,7 @@ export default function UserPortal() {
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   const [showRegistration, setShowRegistration] = useState(false);
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
+  const [newlyCreatedContacts, setNewlyCreatedContacts] = useState<Contact[]>([]);
 
   const searchParams = useSearchParams();
   const isDebugMode = searchParams.get('debug') === 'true';
@@ -236,6 +237,22 @@ export default function UserPortal() {
     
     setIsLoading(false);
   }, [isConnected, address, ownerInfo, ownerError, ownerLoading, vaultListDetails, vaultListDetailsError, vaultListDetailsLoading, contactListDetails, contactListDetailsError, contactListDetailsLoading]);
+
+  // Clear newly created contacts when blockchain data refreshes to prevent duplicates
+  useEffect(() => {
+    if (contactListDetails && Array.isArray(contactListDetails)) {
+      const details = contactListDetails as any[];
+      if (details.length >= 7) {
+        const contactAddresses = details[0] as string[];
+        if (contactAddresses && contactAddresses.length > 0) {
+          // Clear newly created contacts that are now in the blockchain data
+          setNewlyCreatedContacts(prev => 
+            prev.filter(contact => contact.address && !contactAddresses.includes(contact.address))
+          );
+        }
+      }
+    }
+  }, [contactListDetails]);
 
   // Function to get contact display data
   const getContactDisplayData = (contactAddr: string, index: number) => {
@@ -538,8 +555,25 @@ export default function UserPortal() {
       
       console.log('Contact created successfully:', hash);
       
-      // The contact will be automatically added to the blockchain data when it refreshes
-      // No need to manually update local state since the useEffect will rebuild the data
+      // Add the new contact to local state for immediate display
+      if (currentUser) {
+        const newContact: Contact = {
+          id: contactAddress,
+          address: contactAddress,
+          firstName,
+          lastName,
+          email,
+          phone,
+          hasVotingRight,
+          isIdVerified: false,
+          vaults: [],
+          authorizedVaultCount: selectedVaultAddresses.length,
+          owner: currentUser
+        };
+        
+        setNewlyCreatedContacts(prev => [...prev, newContact]);
+      }
+      
       console.log('Contact created successfully on blockchain');
       
     } catch (error) {
@@ -984,17 +1018,18 @@ export default function UserPortal() {
                   </thead>
                   <tbody>
                     {(() => {
-                      // Display blockchain contacts
-                      const contacts = currentUser?.contacts || [];
+                      // Combine blockchain contacts with newly created contacts
+                      const blockchainContacts = currentUser?.contacts || [];
+                      const allContacts = [...blockchainContacts, ...newlyCreatedContacts];
                       
-                      if (contacts.length > 0) {
-                        return contacts.map((contact, idx) => (
+                      if (allContacts.length > 0) {
+                        return allContacts.map((contact, idx) => (
                           <ContactRow key={contact.id} contact={contact} index={idx} />
                         ));
                       } else {
                       return (
                           <tr>
-                            <td colSpan={5} className="py-8 text-center text-white/60">
+                            <td colSpan={7} className="py-8 text-center text-white/60">
                               <div className="flex flex-col items-center gap-2">
                                 <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
                                   <svg className="w-6 h-6 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">

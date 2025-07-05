@@ -133,6 +133,13 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('VaultCreator handleSubmit - Connection check:', { 
+      isConnected, 
+      address, 
+      writeContract: typeof writeContract,
+      writeError 
+    });
+    
     if (!isConnected || !address || !writeContract) {
       console.error('Wallet not connected or missing required data:', { isConnected, address, writeContract });
       alert('Please connect your wallet first');
@@ -140,14 +147,22 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
     }
 
     // Check if user is on the correct network (Sapphire Testnet)
-    if (typeof window !== 'undefined' && window.ethereum) {
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      const sapphireTestnetChainId = '0x5aff'; // 23295 in hex
-      
-      if (chainId !== sapphireTestnetChainId) {
-        alert('Please switch to Sapphire Testnet network in your wallet');
-        return;
+    try {
+      if (typeof window !== 'undefined' && window.ethereum) {
+        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+        const sapphireTestnetChainId = '0x5aff'; // 23295 in hex
+        
+        console.log('Current chain ID:', chainId, 'Expected:', sapphireTestnetChainId);
+        
+        if (chainId !== sapphireTestnetChainId) {
+          alert('Please switch to Sapphire Testnet network in your wallet');
+          return;
+        }
       }
+    } catch (error) {
+      console.error('Error checking network:', error);
+      alert('Error checking network connection. Please ensure you are connected to Sapphire Testnet.');
+      return;
     }
 
     if (!name.trim()) {
@@ -226,8 +241,12 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       
       // Call writeContract directly to trigger MetaMask popup - use the real encryption key
       console.log('About to call writeContract with args:', [name, cypherIV, exportedKey]);
+      console.log('Contract address:', CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY);
       
       try {
+        // Add a small delay to ensure wallet is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const result = await writeContract({
           address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
           abi: LIFESIGNAL_REGISTRY_ABI,
@@ -251,10 +270,12 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
             errorMessage = 'Transaction was cancelled by user.';
           } else if (errorStr.includes('insufficient funds') || errorStr.includes('gas')) {
             errorMessage = 'Insufficient funds for transaction. Please check your wallet balance.';
-          } else if (errorStr.includes('network') || errorStr.includes('connection')) {
-            errorMessage = 'Network connection error. Please check your internet connection and try again.';
+          } else if (errorStr.includes('network') || errorStr.includes('connection') || errorStr.includes('interrupted')) {
+            errorMessage = 'Network connection error. Please check your internet connection and wallet connection, then try again.';
           } else if (errorStr.includes('contract') || errorStr.includes('execution')) {
             errorMessage = 'Smart contract execution failed. The contract may not be deployed or there might be an issue with the blockchain.';
+          } else if (errorStr.includes('subscription')) {
+            errorMessage = 'Wallet connection interrupted. Please reconnect your wallet and try again.';
           } else {
             errorMessage = error.message;
           }
@@ -575,6 +596,15 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
         </button>
 
         <h2 className="text-2xl font-semibold text-white mb-6">Create New Vault</h2>
+
+        {/* Connection Status Debug */}
+        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <p className="text-blue-300 text-sm">
+            Connection Status: {isConnected ? 'Connected' : 'Disconnected'} | 
+            Address: {address ? `${address.slice(0,6)}...${address.slice(-4)}` : 'None'} |
+            Write Contract: {typeof writeContract === 'function' ? 'Available' : 'Not Available'}
+          </p>
+        </div>
 
         {writeError && (
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">

@@ -708,12 +708,61 @@ export const LIFESIGNAL_REGISTRY_ABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_contact",
+        "type": "address"
+      }
+    ],
+    "name": "getContactVaultDetails",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "vaultIds",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "vaultNames",
+        "type": "string[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "vaultOwners",
+        "type": "address[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "isReleased",
+        "type": "bool[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "cypherIvs",
+        "type": "string[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "encryptionKeys",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256[][]",
+        "name": "fileIds",
+        "type": "uint256[][]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ] as const;
 
 // Contract addresses
 export const CONTRACT_ADDRESSES = {
-  LIFESIGNAL_REGISTRY: '0xD11b3e853d3d1e4C5e7c11B11984528CD78D4733' as `0x${string}`,
+  LIFESIGNAL_REGISTRY: '0x3081562F0cf679933FE60997e4b3e13e67472fEd' as `0x${string}`,
 } as const;
 
 // Hook to use contract read functions
@@ -891,13 +940,23 @@ export const contractUtils = {
     });
   },
 
-  // Get vault information
+    // Get vault information
   getVaultInfo: async (readContract: any, vaultId: string) => {
     return readContract({
       address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'getVaultInfo',
       args: [vaultId],
+    });
+  },
+
+  // Get contact's vault details
+  getContactVaultDetails: async (readContract: any, contactAddress: string) => {
+    return readContract({
+      address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+      abi: LIFESIGNAL_REGISTRY_ABI,
+      functionName: 'getContactVaultDetails',
+      args: [contactAddress],
     });
   },
 
