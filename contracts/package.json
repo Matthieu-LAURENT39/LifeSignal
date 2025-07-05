@@ -1,41 +1,32 @@
 {
-  "name": "contracts",
+  "name": "lifesignal-contracts",
   "version": "1.0.0",
-  "description": "Smart contracts for LifeSignal crypto inheritance vault",
+  "description": "Smart contracts for LifeSignal inheritance vault system",
   "main": "index.js",
   "scripts": {
-    "build": "hardhat compile",
+    "compile": "hardhat compile",
     "test": "hardhat test",
-    "test:gas": "REPORT_GAS=true hardhat test",
-    "deploy": "hardhat ignition deploy ignition/modules/Lock.ts",
-    "deploy:sepolia": "hardhat ignition deploy ignition/modules/Lock.ts --network sepolia",
-    "deploy:user": "hardhat ignition deploy ignition/modules/User.ts",
-    "deploy:user:sapphire-testnet": "hardhat ignition deploy ignition/modules/User.ts --network sapphire-testnet",
-    "deploy:user:sapphire-mainnet": "hardhat ignition deploy ignition/modules/User.ts --network sapphire",
-    "test:deployment": "hardhat run scripts/test-deployment.ts",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network sapphire-testnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.js --network sapphire-mainnet",
     "verify": "hardhat verify",
-    "coverage": "hardhat coverage",
-    "lint": "eslint contracts test ignition --ext .ts,.sol",
-    "lint:fix": "eslint contracts test ignition --ext .ts,.sol --fix"
+    "node": "hardhat node"
   },
-  "keywords": [
-    "hardhat",
-    "solidity",
-    "typescript",
-    "smart-contracts",
-    "blockchain",
-    "sapphire",
-    "inheritance"
-  ],
-  "author": "",
-  "license": "MIT",
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^6.0.0",
-    "@oasisprotocol/sapphire-hardhat": "^2.22.2",
-    "dotenv": "^16.6.1",
-    "hardhat": "^2.25.0"
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@oasisprotocol/sapphire-hardhat": "^2.0.0",
+    "hardhat": "^2.19.0"
   },
   "dependencies": {
-    "@chainlink/contracts": "^1.4.0"
-  }
-}
+    "@oasisprotocol/sapphire-contracts": "^0.2.0",
+    "@openzeppelin/contracts": "^5.0.0"
+  },
+  "keywords": [
+    "blockchain",
+    "inheritance",
+    "oasis",
+    "sapphire",
+    "smart-contracts"
+  ],
+  "author": "",
+  "license": "MIT"
+} 
