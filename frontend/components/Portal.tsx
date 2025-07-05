@@ -34,7 +34,7 @@ export function Portal() {
           {/* Portal Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* User Portal */}
-            <Link href="/dashboard">
+            <Link href="/user-portal">
               <motion.div
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -79,7 +79,7 @@ export function Portal() {
             </Link>
             
             {/* Heir Portal */}
-            <Link href="/heir-decrypt">
+            <Link href="/heirs-portal">
               <motion.div
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -90,7 +90,7 @@ export function Portal() {
                     <span className="text-3xl">🏛️</span>
                   </div>
                   
-                  <h2 className="text-3xl font-bold text-white mb-4">Heir Portal</h2>
+                  <h2 className="text-3xl font-bold text-white mb-4">Heirs Portal</h2>
                   
                   <p className="text-white/80 mb-6 leading-relaxed">
                     Access files from your inheritance. Use your inheritance link to decrypt and download secured files.
