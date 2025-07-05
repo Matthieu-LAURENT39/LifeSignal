@@ -27,9 +27,14 @@
   "license": "MIT",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.0.0",
+    "@oasisprotocol/sapphire-hardhat": "^2.22.2",
     "hardhat": "^2.25.0"
   },
   "dependencies": {
+<<<<<<< HEAD
     "@chainlink/contracts": "^1.4.0"
+=======
+    "dotenv": "^16.6.1"
+>>>>>>> user
   }
 }
