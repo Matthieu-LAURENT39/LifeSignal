@@ -5,6 +5,21 @@ const RelayService = require('./services/relayService');
 const logger = require('./utils/logger');
 const config = require('./config');
 
+// Utility function to serialize BigInt values for JSON
+const serializeBigInt = (data) => {
+  if (!data) return null;
+  if (typeof data === 'bigint') return data.toString();
+  if (Array.isArray(data)) return data.map(serializeBigInt);
+  if (typeof data === 'object') {
+    const serialized = {};
+    for (const [key, value] of Object.entries(data)) {
+      serialized[key] = serializeBigInt(value);
+    }
+    return serialized;
+  }
+  return data;
+};
+
 class RelayServer {
   constructor() {
     this.app = express();
@@ -100,8 +115,8 @@ class RelayServer {
 
         res.json({
           address,
-          sepolia: sepoliaData,
-          sapphire: sapphireData,
+          sepolia: serializeBigInt(sepoliaData),
+          sapphire: serializeBigInt(sapphireData),
           timestamp: new Date().toISOString()
         });
       } catch (error) {
@@ -122,7 +137,7 @@ class RelayServer {
         
         res.json({
           address,
-          gracePeriodInfo,
+          gracePeriodInfo: serializeBigInt(gracePeriodInfo),
           timestamp: new Date().toISOString()
         });
       } catch (error) {
