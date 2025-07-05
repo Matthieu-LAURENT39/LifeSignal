@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { useSearchParams } from 'next/navigation';
 import type { Vault, VaultFile, User } from '../../types/models';
 import VaultCreator from '../../components/VaultCreator';
 
@@ -111,6 +112,9 @@ export default function UserPortal() {
   const [isVaultCreatorOpen, setIsVaultCreatorOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
+  const [showAliveConfirm, setShowAliveConfirm] = useState(false);
+  const searchParams = useSearchParams();
+  const isDebugMode = searchParams.get('debug') === 'true';
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -208,10 +212,151 @@ export default function UserPortal() {
     setSelectedVault(null);
   };
 
+  const handleImAlive = () => {
+    if (!currentUser) return;
+
+    // Here we would normally make an API call to confirm user is alive
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        status: 'active',
+        deathDeclaration: null
+      };
+    });
+
+    setShowAliveConfirm(false);
+  };
+
+  const isUserInDangerousState = currentUser?.status === 'voting_in_progress' || currentUser?.status === 'grace_period';
+
+  const setUserStatus = (status: User['status'], withVotes: boolean = false) => {
+    if (!currentUser) return;
+
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+
+      const deathDeclaration = status === 'active' ? null : {
+        declaredBy: '0xDeclarer',
+        declaredAt: new Date().toISOString(),
+        votes: withVotes ? [
+          { contactId: prev.contacts[0].id, voted: true, votedAt: new Date().toISOString() },
+          { contactId: prev.contacts[1].id, voted: false, votedAt: new Date().toISOString() }
+        ] : [],
+        consensusReached: false
+      };
+
+      return {
+        ...prev,
+        status,
+        deathDeclaration
+      };
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-white text-xl">Loading your vaults...</div>
+      </div>
+    );
+  }
+
+  // Add dead status check
+  if (currentUser?.status === 'dead') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        {/* Background decoration */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-500/20 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        </div>
+
+        {/* Dead Status Message */}
+        <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
+          <div className="text-center">
+            <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="text-5xl">💀</span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-bold text-red-400 mb-4">
+              You Are Dead
+            </h1>
+            <p className="text-xl text-white/60">
+              Your vaults have been released to your heirs
+            </p>
+          </div>
+        </div>
+
+        {/* Debug Section */}
+        {isDebugMode && currentUser && (
+          <div className="fixed bottom-4 left-4 right-4 z-50 backdrop-blur-xl bg-black/40 border border-white/20 rounded-2xl p-4 max-w-2xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Debug Controls</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-white/60 text-sm">Current Status:</span>
+                <span className="px-2 py-1 rounded-lg text-sm bg-red-500/20 text-red-400">
+                  {currentUser.status}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <button
+                onClick={() => setUserStatus('active')}
+                className="p-2 rounded-xl border bg-white/5 border-white/20 text-white/80 hover:bg-white/10"
+              >
+                Set Active
+              </button>
+              <button
+                onClick={() => setUserStatus('voting_in_progress', true)}
+                className="p-2 rounded-xl border bg-white/5 border-white/20 text-white/80 hover:bg-white/10"
+              >
+                Start Voting
+              </button>
+              <button
+                onClick={() => setUserStatus('grace_period')}
+                className="p-2 rounded-xl border bg-white/5 border-white/20 text-white/80 hover:bg-white/10"
+              >
+                Set Grace Period
+              </button>
+              <button
+                onClick={() => setUserStatus('dead')}
+                className="p-2 rounded-xl border bg-red-500/20 border-red-500/50 text-red-400"
+              >
+                Set Dead
+              </button>
+            </div>
+
+            {currentUser.deathDeclaration && (
+              <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
+                <h4 className="text-sm font-medium text-white/80 mb-2">Death Declaration Details</h4>
+                <div className="space-y-1 text-sm">
+                  <p className="text-white/60">
+                    Declared by: <span className="text-white/80 font-mono">{currentUser.deathDeclaration.declaredBy}</span>
+                  </p>
+                  <p className="text-white/60">
+                    Declared at: <span className="text-white/80">{new Date(currentUser.deathDeclaration.declaredAt).toLocaleString()}</span>
+                  </p>
+                  {currentUser.deathDeclaration.votes.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-white/60 mb-1">Votes:</p>
+                      <div className="space-y-1">
+                        {currentUser.deathDeclaration.votes.map(vote => (
+                          <div key={vote.contactId} className="flex items-center justify-between text-xs bg-white/5 rounded-lg p-2">
+                            <span className="font-mono text-white/70">{vote.contactId}</span>
+                            <span className={vote.voted ? 'text-emerald-400' : 'text-red-400'}>
+                              {vote.voted ? 'Voted Yes' : 'Not Voted'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -247,6 +392,33 @@ export default function UserPortal() {
             <p className="text-xl text-white/80">
               Manage your inheritance vaults and digital legacy
             </p>
+
+            {/* Status Warning Banner */}
+            {isUserInDangerousState && (
+              <div className="mt-6 backdrop-blur-md bg-red-500/10 border border-red-500/20 rounded-2xl p-6 max-w-2xl mx-auto">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-2xl">⚠️</span>
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h3 className="text-lg font-semibold text-red-400">Death Declaration in Progress</h3>
+                    <p className="text-white/70 text-sm mt-1">
+                      {currentUser?.status === 'voting_in_progress' 
+                        ? `Your contacts have initiated a death declaration process. If you&apos;re seeing this, please confirm you&apos;re alive.`
+                        : `You are in a grace period. Please confirm you&apos;re alive to prevent vault release.`}
+                    </p>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowAliveConfirm(true)}
+                    className="px-6 py-3 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg whitespace-nowrap"
+                  >
+                    I&apos;m Alive
+                  </motion.button>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Quick Stats */}
@@ -458,6 +630,42 @@ export default function UserPortal() {
         </div>
       )}
 
+      {/* Alive Confirmation Modal */}
+      {showAliveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="relative w-full max-w-md bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 border border-white/20 rounded-2xl p-6"
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">✋</span>
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-2">Confirm You&apos;re Alive</h3>
+              <p className="text-white/70 mb-6">
+                By confirming, you&apos;ll cancel the death declaration process and reset your status to active. This will notify all your contacts.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowAliveConfirm(false)}
+                  className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleImAlive}
+                  className="flex-1 px-4 py-2 bg-emerald-500/80 hover:bg-emerald-500/90 text-white rounded-xl border border-emerald-500/20 transition-colors"
+                >
+                  Yes, I&apos;m Alive
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Vault Creator Modal */}
       <VaultCreator
         isOpen={isVaultCreatorOpen}
@@ -465,6 +673,98 @@ export default function UserPortal() {
         onSubmit={handleCreateVault}
         availableContacts={currentUser?.contacts || []}
       />
+
+      {/* Debug Section */}
+      {isDebugMode && currentUser && (
+        <div className="fixed bottom-4 left-4 right-4 z-50 backdrop-blur-xl bg-black/40 border border-white/20 rounded-2xl p-4 max-w-2xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Debug Controls</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-white/60 text-sm">Current Status:</span>
+              <span className={`px-2 py-1 rounded-lg text-sm ${
+                currentUser.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
+                currentUser.status === 'voting_in_progress' ? 'bg-yellow-500/20 text-yellow-400' :
+                currentUser.status === 'grace_period' ? 'bg-orange-500/20 text-orange-400' :
+                'bg-red-500/20 text-red-400'
+              }`}>
+                {currentUser.status}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <button
+              onClick={() => setUserStatus('active')}
+              className={`p-2 rounded-xl border transition-colors ${
+                currentUser.status === 'active'
+                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                  : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+              }`}
+            >
+              Set Active
+            </button>
+            <button
+              onClick={() => setUserStatus('voting_in_progress', true)}
+              className={`p-2 rounded-xl border transition-colors ${
+                currentUser.status === 'voting_in_progress'
+                  ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400'
+                  : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+              }`}
+            >
+              Start Voting
+            </button>
+            <button
+              onClick={() => setUserStatus('grace_period')}
+              className={`p-2 rounded-xl border transition-colors ${
+                currentUser.status === 'grace_period'
+                  ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                  : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+              }`}
+            >
+              Set Grace Period
+            </button>
+            <button
+              onClick={() => setUserStatus('dead')}
+              className={`p-2 rounded-xl border transition-colors ${
+                currentUser.status === 'dead'
+                  ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                  : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
+              }`}
+            >
+              Set Dead
+            </button>
+          </div>
+
+          {currentUser.deathDeclaration && (
+            <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
+              <h4 className="text-sm font-medium text-white/80 mb-2">Death Declaration Details</h4>
+              <div className="space-y-1 text-sm">
+                <p className="text-white/60">
+                  Declared by: <span className="text-white/80 font-mono">{currentUser.deathDeclaration.declaredBy}</span>
+                </p>
+                <p className="text-white/60">
+                  Declared at: <span className="text-white/80">{new Date(currentUser.deathDeclaration.declaredAt).toLocaleString()}</span>
+                </p>
+                {currentUser.deathDeclaration.votes.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-white/60 mb-1">Votes:</p>
+                    <div className="space-y-1">
+                      {currentUser.deathDeclaration.votes.map(vote => (
+                        <div key={vote.contactId} className="flex items-center justify-between text-xs bg-white/5 rounded-lg p-2">
+                          <span className="font-mono text-white/70">{vote.contactId}</span>
+                          <span className={vote.voted ? 'text-emerald-400' : 'text-red-400'}>
+                            {vote.voted ? 'Voted Yes' : 'Not Voted'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 } 
