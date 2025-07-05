@@ -6,10 +6,11 @@ import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useSearchParams } from 'next/navigation';
-import type { Vault, VaultFile, User } from '../../types/models';
+import type { Vault, VaultFile, Owner, Contact } from '../../types/models';
 import VaultCreator from '../../components/VaultCreator';
+import ContactCreator from '../../components/ContactCreator';
 
-const buildMockData = (ownerAddr: string): User => {
+const buildMockData = (ownerAddr: string): Owner => {
   // files
   const f1: VaultFile = {
     id: 'f1',
@@ -47,36 +48,30 @@ const buildMockData = (ownerAddr: string): User => {
   };
 
   // contacts
-  const c1: User = {
+  const c1: Contact = {
     id: 'c1',
     address: '0xHeir1',
-    firstname: 'Sarah',
-    lastname: 'Johnson',
+    firstName: 'Sarah',
+    lastName: 'Johnson',
     email: 'sarah@example.com',
     birthDate: '1990-03-12',
     hasVotingRight: true,
     isIdVerified: true,
-    status: 'active',
-    graceInterval: 30,
-    deathDeclaration: null,
     vaults: [],
-    contacts: []
+    owner: {} as Owner // will be set later
   };
 
-  const c2: User = {
+  const c2: Contact = {
     id: 'c2',
     address: '0xHeir2',
-    firstname: 'Mike',
-    lastname: 'Wilson',
+    firstName: 'Mike',
+    lastName: 'Wilson',
     email: 'mike@example.com',
     birthDate: '1988-07-22',
     hasVotingRight: false,
     isIdVerified: false,
-    status: 'active',
-    graceInterval: 30,
-    deathDeclaration: null,
     vaults: [],
-    contacts: []
+    owner: {} as Owner // will be set later
   };
 
   // link contacts to vaults
@@ -86,12 +81,13 @@ const buildMockData = (ownerAddr: string): User => {
   c2.vaults = [v1];
 
   // utilisateur courant
-  const user: User = {
+  const owner: Owner = {
     id: 'u1',
     address: ownerAddr,
-    firstname: 'Alice',
-    lastname: 'Owner',
+    firstName: 'Alice',
+    lastName: 'Owner',
     email: 'alice@domain.com',
+    phone: '0606060606',
     status: 'active',
     graceInterval: 30,
     deathDeclaration: null,
@@ -101,15 +97,20 @@ const buildMockData = (ownerAddr: string): User => {
     contacts: [c1, c2]
   };
 
-  return user;
+  // Set owner reference in contacts
+  c1.owner = owner;
+  c2.owner = owner;
+
+  return owner;
 };
 
 export default function UserPortal() {
   const { address, isConnected } = useAccount();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<Owner | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVault, setSelectedVault] = useState<Vault | null>(null);
   const [isVaultCreatorOpen, setIsVaultCreatorOpen] = useState(false);
+  const [isContactCreatorOpen, setIsContactCreatorOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
   const [showAliveConfirm, setShowAliveConfirm] = useState(false);
@@ -132,9 +133,9 @@ export default function UserPortal() {
   }, [isConnected, address]);
 
   // Calculate real statistics
-  const activeVaults = currentUser?.vaults.filter(v => !v.isReleased).length ?? 0;
-  const totalFiles = currentUser?.vaults.reduce((n, v) => n + v.files.length, 0) ?? 0;
-  const totalHeirsCount = currentUser?.contacts.length ?? 0;
+  const activeVaults = currentUser?.vaults?.filter(v => !v.isReleased).length ?? 0;
+  const totalFiles = currentUser?.vaults?.reduce((n, v) => n + (v.files?.length ?? 0), 0) ?? 0;
+  const totalHeirsCount = currentUser?.contacts?.length ?? 0;
 
   const getVaultIcon = (vaultName: string) => {
     if (vaultName.toLowerCase().includes('family')) return '🏦';
@@ -155,7 +156,7 @@ export default function UserPortal() {
   const handleCreateVault = async ({ name, files, selectedContacts }: { name: string; files: File[]; selectedContacts: string[] }) => {
     // Here we would normally make an API call to create the vault
     // For now, we'll just update the local state with a mock vault
-    if (!currentUser) return;
+    if (!currentUser || !currentUser.contacts) return;
 
     // Create mock VaultFiles from the uploaded files
     const vaultFiles: VaultFile[] = files.map(file => ({
@@ -180,7 +181,7 @@ export default function UserPortal() {
     };
 
     setCurrentUser(prev => {
-      if (!prev) return prev;
+      if (!prev || !prev.vaults) return prev;
       return {
         ...prev,
         vaults: [...prev.vaults, newVault]
@@ -196,11 +197,10 @@ export default function UserPortal() {
   };
 
   const confirmDeleteVault = () => {
-    if (!vaultToDelete || !currentUser) return;
+    if (!vaultToDelete || !currentUser || !currentUser.vaults) return;
 
-    // Here we would normally make an API call to delete the vault
     setCurrentUser(prev => {
-      if (!prev) return prev;
+      if (!prev || !prev.vaults) return prev;
       return {
         ...prev,
         vaults: prev.vaults.filter(v => v.id !== vaultToDelete.id)
@@ -230,11 +230,11 @@ export default function UserPortal() {
 
   const isUserInDangerousState = currentUser?.status === 'voting_in_progress' || currentUser?.status === 'grace_period';
 
-  const setUserStatus = (status: User['status'], withVotes: boolean = false) => {
+  const setUserStatus = (status: Owner['status'], withVotes: boolean = false) => {
     if (!currentUser) return;
 
     setCurrentUser(prev => {
-      if (!prev) return prev;
+      if (!prev || !prev.contacts) return prev;
 
       const deathDeclaration = status === 'active' ? null : {
         declaredBy: '0xDeclarer',
@@ -252,6 +252,61 @@ export default function UserPortal() {
         deathDeclaration
       };
     });
+  };
+
+  const handleCreateContact = async ({ firstname, lastname, contact, contactType, hasVotingRight, selectedVaultIds }: { 
+    firstname: string;
+    lastname: string;
+    contact: string;
+    contactType: 'email' | 'phone';
+    hasVotingRight: boolean;
+    selectedVaultIds: string[];
+  }) => {
+    if (!currentUser || !currentUser.vaults) return;
+
+    const selectedVaults = currentUser.vaults.filter(v => selectedVaultIds.includes(v.id));
+
+    // Generate a random 10-character ID
+    const randomId = Math.random().toString(36).substring(2, 12);
+
+    const newContact: Contact = {
+      id: randomId,
+      firstName: firstname,
+      lastName: lastname,
+      email: contactType === 'email' ? contact : '',
+      phone: contactType === 'phone' ? contact : '',
+      hasVotingRight,
+      isIdVerified: false,  // Will be verified through Self.ID
+      vaults: selectedVaults,
+      owner: currentUser
+    };
+
+    // Log the newly created contact
+    console.log('New contact created:', newContact);
+
+    // Update the user's contacts
+    setCurrentUser(prev => {
+      if (!prev || !prev.contacts) return prev;
+      return {
+        ...prev,
+        contacts: [...prev.contacts, newContact]
+      };
+    });
+
+    // Also update the selected vaults with the new contact
+    setCurrentUser(prev => {
+      if (!prev || !prev.vaults) return prev;
+      return {
+        ...prev,
+        vaults: prev.vaults.map(vault => 
+          selectedVaultIds.includes(vault.id)
+            ? { ...vault, contacts: [...(vault.contacts || []), newContact] }
+            : vault
+        )
+      };
+    });
+
+    setIsContactCreatorOpen(false);
   };
 
   if (isLoading) {
@@ -421,114 +476,123 @@ export default function UserPortal() {
             )}
           </div>
           
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-              <div className="text-2xl font-bold text-emerald-400 mb-1">{activeVaults}</div>
-              <div className="text-sm text-white/60">Active Vaults</div>
-            </div>
-            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-              <div className="text-2xl font-bold text-teal-400 mb-1">{totalFiles}</div>
-              <div className="text-sm text-white/60">Total Files</div>
-            </div>
-            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-              <div className="text-2xl font-bold text-cyan-400 mb-1">{totalHeirsCount}</div>
-              <div className="text-sm text-white/60">Heirs</div>
-            </div>
-          </div>
-          
-          {/* Vaults Section */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-semibold text-white">Your Vaults</h2>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsVaultCreatorOpen(true)}
-              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
-            >
-              <span>➕</span> Create Vault
-            </motion.button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {currentUser?.vaults.map((vault, index) => (
-              <div key={vault.id} className="backdrop-blur-md bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
-                {/* Gradient ring */}
-                <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${getVaultColor(index)} blur-2xl opacity-30`} />
-
-                <div className="flex items-center gap-3 mb-4 relative z-10">
-                  <div className={`w-12 h-12 bg-gradient-to-r ${getVaultColor(index)} rounded-2xl flex items-center justify-center text-xl`}>
-                    {getVaultIcon(vault.name)}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white">{vault.name}</h3>
-                    <p className="text-white/60 text-xs">
-                      {vault.files.length} files • {vault.contacts.length} heirs
-                    </p>
-                  </div>
+          {/* Only show the rest of the content if not in dangerous state */}
+          {!isUserInDangerousState && (
+            <>
+              {/* Quick Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-bold text-emerald-400 mb-1">{activeVaults}</div>
+                  <div className="text-sm text-white/60">Active Vaults</div>
                 </div>
-
-                <div className="relative z-10">
-                  <button
-                    className="w-full px-3 py-2 bg-white/10 text-white/80 text-sm rounded-lg border border-white/20 hover:bg-white/20"
-                    onClick={() => setSelectedVault(vault)}
-                  >
-                    Open
-                  </button>
+                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-bold text-teal-400 mb-1">{totalFiles}</div>
+                  <div className="text-sm text-white/60">Total Files</div>
+                </div>
+                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-bold text-cyan-400 mb-1">{totalHeirsCount}</div>
+                  <div className="text-sm text-white/60">Heirs</div>
                 </div>
               </div>
-            ))}
-          </div>
-          
-          {/* Contacts Section */}
-          <div className="flex items-center justify-between mb-4 mt-2">
-            <h2 className="text-2xl font-semibold text-white">Your Contacts</h2>
-            <Link href="/dashboard#add-contact">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
-              >
-                <span>➕</span> Add Contact
-              </motion.button>
-            </Link>
-          </div>
+              
+              {/* Vaults Section */}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-semibold text-white">Your Vaults</h2>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsVaultCreatorOpen(true)}
+                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+                >
+                  <span>➕</span> Create Vault
+                </motion.button>
+              </div>
 
-          <div className="overflow-x-auto mb-12 backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl">
-            <table className="min-w-full text-sm text-white/80">
-              <thead className="bg-white/10 text-xs uppercase tracking-wider text-white/60">
-                <tr>
-                  <th className="py-3 px-4 text-left">Name</th>
-                  <th className="py-3 px-4 text-left">Address</th>
-                  <th className="py-3 px-4 text-center">Voting</th>
-                  <th className="py-3 px-4 text-center">ID Verified</th>
-                  <th className="py-3 px-4 text-center">Vaults</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentUser?.contacts.map((c, idx) => (
-                  <tr key={c.id} className={idx % 2 ? 'bg-white/5' : ''}>
-                    <td className="py-3 px-4 whitespace-nowrap">{c.firstname} {c.lastname}</td>
-                    <td className="py-3 px-4 font-mono">{c.address.slice(0,6)}…{c.address.slice(-4)}</td>
-                    <td className="py-3 px-4 text-center">
-                      {c.hasVotingRight ? <span className="text-green-400">Yes</span> : <span className="text-gray-400">No</span>}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {c.isIdVerified ? '✔️' : '❌'}
-                    </td>
-                    <td className="py-3 px-4 text-center">{c.vaults.length}</td>
-                  </tr>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+                {currentUser?.vaults?.map((vault, index) => (
+                  <div key={vault.id} className="backdrop-blur-md bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
+                    {/* Gradient ring */}
+                    <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${getVaultColor(index)} blur-2xl opacity-30`} />
+
+                    <div className="flex items-center gap-3 mb-4 relative z-10">
+                      <div className={`w-12 h-12 bg-gradient-to-r ${getVaultColor(index)} rounded-2xl flex items-center justify-center text-xl`}>
+                        {getVaultIcon(vault.name)}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-white">{vault.name}</h3>
+                        <p className="text-white/60 text-xs">
+                          {vault.files?.length ?? 0} files • {vault.contacts?.length ?? 0} heirs
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="relative z-10">
+                      <button
+                        className="w-full px-3 py-2 bg-white/10 text-white/80 text-sm rounded-lg border border-white/20 hover:bg-white/20"
+                        onClick={() => setSelectedVault(vault)}
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              
+              {/* Contacts Section */}
+              <div className="flex items-center justify-between mb-4 mt-2">
+                <h2 className="text-2xl font-semibold text-white">Your Contacts</h2>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsContactCreatorOpen(true)}
+                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
+                >
+                  <span>➕</span> Add Contact
+                </motion.button>
+              </div>
 
-          {/* Developer link */}
-          <div className="text-center">
-            <Link href="/debug" className="text-white/40 hover:text-white/60 text-sm transition-colors">
-              Developer Tools
-            </Link>
-          </div>
+              <div className="overflow-x-auto mb-12 backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl">
+                <table className="min-w-full text-sm text-white/80">
+                  <thead className="bg-white/10 text-xs uppercase tracking-wider text-white/60">
+                    <tr>
+                      <th className="py-3 px-4 text-center">ID Verified</th>
+                      <th className="py-3 px-4 text-left">Name</th>
+                      <th className="py-3 px-4 text-left">Address</th>
+                      <th className="py-3 px-4 text-center">Voting</th>
+                      <th className="py-3 px-4 text-center">Vaults</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentUser?.contacts?.map((contact, idx) => {
+                      const typedContact = contact as Contact;
+                      return (
+                        <tr key={contact.id} className={idx % 2 ? 'bg-white/5' : ''}>
+                          <td className="py-3 px-4 text-center">
+                            {contact.isIdVerified ? '✔️' : '❌'}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">{contact.firstName} {contact.lastName}</td>
+                          <td className="py-3 px-4 font-mono">
+                            {contact.address ? `${contact.address.slice(0,6)}…${contact.address.slice(-4)}` : 'No address'}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            {typedContact.hasVotingRight ? <span className="text-green-400">Yes</span> : <span className="text-gray-400">No</span>}
+                          </td>
+                          <td className="py-3 px-4 text-center">{typedContact.vaults?.length ?? 0}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Developer link */}
+              <div className="text-center">
+                <Link href="/debug" className="text-white/40 hover:text-white/60 text-sm transition-colors">
+                  Developer Tools
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -544,7 +608,7 @@ export default function UserPortal() {
             {/* Files list */}
             <div className="mb-6">
               <h4 className="text-lg font-medium text-white mb-2">Files</h4>
-              {selectedVault.files.length === 0 ? (
+              {!selectedVault.files?.length ? (
                 <p className="text-white/50 text-sm">No files</p>
               ) : (
                 <ul className="space-y-2 max-h-48 overflow-y-auto pr-2">
@@ -561,14 +625,16 @@ export default function UserPortal() {
             {/* Contacts list */}
             <div>
               <h4 className="text-lg font-medium text-white mb-2">Contacts</h4>
-              {selectedVault.contacts.length === 0 ? (
+              {!selectedVault.contacts?.length ? (
                 <p className="text-white/50 text-sm">No contacts</p>
               ) : (
                 <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                  {selectedVault.contacts.map(c => (
-                    <li key={c.id} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/80 text-sm">
-                      <span>{c.firstname} {c.lastname}</span>
-                      <span className="font-mono text-xs">{c.address.slice(0,6)}…{c.address.slice(-4)}</span>
+                  {selectedVault.contacts.map(contact => (
+                    <li key={contact.id} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/80 text-sm">
+                      <span>{contact.firstName} {contact.lastName}</span>
+                      <span className="font-mono text-xs">
+                        {contact.address ? `${contact.address.slice(0,6)}…${contact.address.slice(-4)}` : 'No address'}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -667,11 +733,21 @@ export default function UserPortal() {
       )}
 
       {/* Vault Creator Modal */}
-      <VaultCreator
-        isOpen={isVaultCreatorOpen}
-        onClose={() => setIsVaultCreatorOpen(false)}
-        onSubmit={handleCreateVault}
-        availableContacts={currentUser?.contacts || []}
+      {!isUserInDangerousState && (
+        <VaultCreator
+          isOpen={isVaultCreatorOpen}
+          onClose={() => setIsVaultCreatorOpen(false)}
+          onSubmit={handleCreateVault}
+          availableContacts={currentUser?.contacts || []}
+        />
+      )}
+
+      {/* Contact Creator Modal */}
+      <ContactCreator
+        isOpen={isContactCreatorOpen}
+        onClose={() => setIsContactCreatorOpen(false)}
+        onSubmit={handleCreateContact}
+        availableVaults={currentUser?.vaults || []}
       />
 
       {/* Debug Section */}
@@ -726,7 +802,7 @@ export default function UserPortal() {
             <button
               onClick={() => setUserStatus('dead')}
               className={`p-2 rounded-xl border transition-colors ${
-                currentUser.status === 'dead'
+                (currentUser?.status as string) === 'dead'
                   ? 'bg-red-500/20 border-red-500/50 text-red-400'
                   : 'bg-white/5 border-white/20 text-white/80 hover:bg-white/10'
               }`}
