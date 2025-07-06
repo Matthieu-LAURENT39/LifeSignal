@@ -1,15 +1,15 @@
 sequenceDiagram
     participant User
-    participant OASIS
-    participant Contacts
+    participant OASIS Sapphire
+    participant Heir
 
     Note over User: User is still alive
-    Note over Contacts: Contacts can signal the user death. A contact can be a heir.
-    User->>OASIS: call function to modify heirs (modify, add, remove)
-    User->>OASIS: call function modify contacts (modify, add, remove)
+    Note over Heir: Contacts can signal the user death. A contact can be associated to a vault (heir)
+    User->>OASIS Sapphire: call function to modify heirs (modify, add, remove)
+    User->>OASIS Sapphire: call function to modify contacts (modify, add, remove)
 
     Note over User: User is declared dead
 
-    User->>OASIS: call function to modify owner of the smart contract
-    OASIS->>Contacts: smart contract owners are heirs
+    User->>OASIS Sapphire : call function to give access of the content of the vault to the heirs
+    OASIS Sapphire ->>Heir: heirs can know view and decrypt files stored in the vault
 
