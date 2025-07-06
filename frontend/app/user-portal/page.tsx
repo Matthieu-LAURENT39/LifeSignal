@@ -1142,14 +1142,10 @@ export default function UserPortal() {
           {!deathStatus?.isInGracePeriod && !deathStatus?.isDeceased && !isAccessBlocked && (
             <>
               {/* Quick Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                 <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
                   <div className="text-2xl font-bold text-emerald-400 mb-1">{activeVaults}</div>
                   <div className="text-sm text-white/60">Active Vaults</div>
-                </div>
-                <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
-                  <div className="text-2xl font-bold text-teal-400 mb-1">{totalFiles}</div>
-                  <div className="text-sm text-white/60">Total Files</div>
                 </div>
                 <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl p-4 text-center">
                   <div className="text-2xl font-bold text-cyan-400 mb-1">{totalHeirsCount}</div>
