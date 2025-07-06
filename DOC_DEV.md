@@ -6,9 +6,6 @@ This document outlines the core technologies used in the project and how to inst
 
 ## 🧩 Tech Stack Overview
 
-### 🧠 Self
-**Self** is a decentralized identity protocol that lets users prove attributes (like being alive) **privately and self-sovereignly**, without revealing sensitive information. It’s ideal for zero-knowledge identity flows in privacy-first dApps.
-
 ### 🧊 Walrus
 **Walrus** is a decentralized cold-storage solution optimized for encrypted files. It offers:
 - Long-term storage
@@ -18,10 +15,6 @@ Perfect for storing sensitive user data like inheritance documents.
 
 ### 🛡️ Oasis Sapphire
 **Oasis Sapphire** is a confidential EVM-compatible blockchain. It enables smart contracts to keep data (like encryption keys) **private**, even on-chain. This is critical for secure inheritance scenarios.
-
-### ⛓️ Chainlink Automation
-**Chainlink Automation** runs decentralized off-chain logic to monitor smart contract conditions.  
-We use it to detect **user inactivity** (via "life pings") and trigger inheritance when needed. It currently runs on **Sepolia testnet**.
 
 ### 🌐 Next.js + Tailwind + Ethers.js
 - **Next.js**: React-based framework for building the frontend.
