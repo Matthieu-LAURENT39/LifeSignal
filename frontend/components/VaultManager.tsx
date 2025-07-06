@@ -103,7 +103,6 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateVault, setShowCreateVault] = useState(false);
   const [showAddFile, setShowAddFile] = useState(false);
-  const [showAuthorizeContact, setShowAuthorizeContact] = useState(false);
   const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
   
   // File upload states
@@ -118,8 +117,6 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
     encryptionKey: '',
     iv: ''
   });
-
-  const [contactsToAuthorize, setContactsToAuthorize] = useState<string[]>([]);
 
   // Get detailed vault list using wagmi v2 hooks
   const { data: vaultListDetails, error: vaultListDetailsError } = useReadContract({
@@ -213,12 +210,20 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
           
           console.log(`Vault ${vaultId} has ${validFiles.length} files:`, validFiles.map(f => f.originalName));
 
+          // Get authorized contact addresses for this vault
+          const authorizedContactAddrs = authorizedContacts?.[index] || [];
+          
+          // Find the full contact objects for these addresses from availableContacts
+          const vaultContacts = availableContacts.filter(contact => 
+            contact.address && authorizedContactAddrs.includes(contact.address)
+          );
+
           return {
             id: vaultId.toString(),
             name: names?.[index] || `Vault ${index + 1}`,
             owner: vaultOwners?.[index] || address || '',
             files: validFiles,
-            contacts: [], // Would need to fetch individual contact details
+            contacts: vaultContacts, // Now contains full contact info
             isReleased: isReleased?.[index] || false,
             cypher: {
               iv: cypherIvs?.[index] || 'placeholder',
@@ -236,7 +241,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
     };
 
     loadVaultDetails();
-  }, [vaultListDetails, address]);
+  }, [vaultListDetails, address, availableContacts]);
 
   // Get detailed contact list using wagmi v2 hooks
   const { data: contactListDetails, error: contactListDetailsError } = useReadContract({
@@ -571,17 +576,6 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
                   >
                     Add File
                   </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => {
-                      setSelectedVault(vault);
-                      setShowAuthorizeContact(true);
-                    }}
-                    className="px-4 py-2 bg-white/10 text-white text-sm rounded-lg hover:bg-white/20 transition-colors"
-                  >
-                    Add Contact
-                  </motion.button>
                 </div>
                 <motion.a
                   href={`https://explorer.oasis.io/testnet/sapphire/address/${CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY}`}
@@ -813,172 +807,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
         )}
       </AnimatePresence>
 
-      {/* Authorize Contact Modal */}
-      <AnimatePresence>
-        {showAuthorizeContact && selectedVault && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-8 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto"
-            >
-              <h3 className="text-2xl font-bold text-white mb-6">Authorize Contacts for {selectedVault.name}</h3>
-              
-              {/* Get authorized contacts for this vault */}
-              {(() => {
-                const vaultIndex = vaults.findIndex(v => v.id === selectedVault.id);
-                const authorizedContacts = vaultListDetails && Array.isArray(vaultListDetails) && vaultListDetails.length >= 8 
-                  ? (vaultListDetails[7] as readonly (readonly string[])[])[vaultIndex] || []
-                  : [];
-                
-                // Filter out contacts already authorized for this vault
-                const availableContactsForVault = availableContacts.filter(contact => 
-                  contact.address && !authorizedContacts.includes(contact.address)
-                );
 
-                return (
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      if (!writeContract || !selectedVault || contactsToAuthorize.length === 0) return;
-                      
-                      try {
-                        for (const contactAddr of contactsToAuthorize) {
-                          await writeContract({
-                            address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY as any,
-                            abi: LIFESIGNAL_REGISTRY_ABI as any,
-                            functionName: 'authorizeVaultContact',
-                            args: [BigInt(selectedVault.id), contactAddr],
-                          });
-                        }
-                        setShowAuthorizeContact(false);
-                        setContactsToAuthorize([]);
-                        setTimeout(() => window.location.reload(), 2000);
-                      } catch (error) {
-                        console.error('Error authorizing contacts:', error);
-                      }
-                    }}
-                    className="space-y-6"
-                  >
-                    {/* Selected count */}
-                    {contactsToAuthorize.length > 0 && (
-                      <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-lg">
-                        <p className="text-emerald-300 text-sm font-medium">
-                          {contactsToAuthorize.length} contact{contactsToAuthorize.length !== 1 ? 's' : ''} selected
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Contact selection */}
-                    <div>
-                      <label className="block text-white/80 text-sm font-medium mb-3">
-                        Select Contacts to Authorize
-                      </label>
-                      
-                      {availableContactsForVault.length === 0 ? (
-                        <div className="p-6 bg-white/5 border border-white/10 rounded-xl text-center">
-                          <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <svg className="w-6 h-6 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                          </div>
-                          <p className="text-white/60 text-sm">All contacts are already authorized for this vault</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                          {availableContactsForVault.map((contact) => (
-                            <label
-                              key={contact.id}
-                              className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:bg-white/5 ${
-                                contact.address && contactsToAuthorize.includes(contact.address)
-                                  ? 'bg-emerald-500/20 border-emerald-500/50'
-                                  : 'bg-white/5 border-white/10 hover:border-white/20'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={contact.address ? contactsToAuthorize.includes(contact.address) : false}
-                                onChange={(e) => {
-                                  if (e.target.checked && contact.address) {
-                                    setContactsToAuthorize(prev => [...prev, contact.address as string]);
-                                  } else if (!e.target.checked && contact.address) {
-                                    setContactsToAuthorize(prev => prev.filter(addr => addr !== contact.address));
-                                  }
-                                }}
-                                className="w-4 h-4 text-emerald-600 bg-slate-700 border-white/30 rounded focus:ring-emerald-500 focus:ring-2"
-                              />
-                              <div className="ml-3 flex-1">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="text-white font-medium">
-                                      {contact.firstName} {contact.lastName}
-                                    </p>
-                                    <p className="text-white/60 text-sm">
-                                      {contact.email || 'No email'}
-                                    </p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-white/40 text-xs font-mono">
-                                      {contact.address?.slice(0, 6)}...{contact.address?.slice(-4)}
-                                    </p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      {contact.hasVotingRight && (
-                                        <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs rounded-full">
-                                          Voting
-                                        </span>
-                                      )}
-                                      {contact.isIdVerified && (
-                                        <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
-                                          Verified
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                </div>
-
-                    {/* Action buttons */}
-                <div className="flex gap-4 pt-4">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    type="button"
-                        onClick={() => {
-                          setShowAuthorizeContact(false);
-                          setContactsToAuthorize([]);
-                        }}
-                    className="flex-1 px-6 py-3 bg-white/10 text-white font-medium rounded-xl border border-white/20 hover:bg-white/20"
-                  >
-                    Cancel
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    type="submit"
-                        disabled={isPending || contactsToAuthorize.length === 0 || availableContactsForVault.length === 0}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium rounded-xl hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                        {isPending ? 'Authorizing...' : `Authorize ${contactsToAuthorize.length} Contact${contactsToAuthorize.length !== 1 ? 's' : ''}`}
-                  </motion.button>
-                </div>
-              </form>
-                );
-              })()}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Error Display */}
       {writeError && (

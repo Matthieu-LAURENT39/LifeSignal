@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useAccount } from 'wagmi';
+import { getAddress } from 'viem';
 import { useLifeSignalRegistryWrite, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import type { Vault } from '../types/models';
 
@@ -15,7 +16,7 @@ interface ContactCreatorProps {
     contactAddress: string;
     hasVotingRight: boolean;
     selectedVaultAddresses: string[];
-  }) => void;
+  }) => Promise<void>;
   availableVaults: Vault[];
 }
 
@@ -51,8 +52,17 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
     if (!/^\+?[\d\s-]{8,}$/.test(phone)) {
       newErrors.phone = 'Invalid phone number format';
     }
-    if (!/^0x[a-fA-F0-9]{40}$/.test(contactAddress)) {
-      newErrors.contactAddress = 'Invalid Ethereum address format';
+    
+    // Validate Ethereum address format and checksum
+    try {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(contactAddress)) {
+        newErrors.contactAddress = 'Invalid Ethereum address format';
+      } else {
+        // This will throw an error if the checksum is invalid
+        getAddress(contactAddress);
+      }
+    } catch (error) {
+      newErrors.contactAddress = 'Invalid Ethereum address checksum';
     }
 
     setErrors(newErrors);
@@ -64,7 +74,7 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
     
     if (!validateForm()) return;
     
-    if (!isConnected || !address || !writeContract) {
+    if (!isConnected || !address) {
       alert('Please connect your wallet first');
       return;
     }
@@ -72,39 +82,18 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
     try {
       setIsSubmitting(true);
       
-      // Convert selected vault addresses to bigint (vault IDs)
-      const authorizedVaults = selectedVaultAddresses.map(vaultId => BigInt(vaultId));
-      
-      console.log('Calling addContact with:', {
+      console.log('Submitting contact data:', {
         contact: contactAddress,
         firstName,
         lastName,
         email,
         phone,
         hasVotingRight,
-        authorizedVaults
+        selectedVaultAddresses
       });
 
-      // Call the smart contract
-      const result = await writeContract({
-        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-        abi: LIFESIGNAL_REGISTRY_ABI,
-        functionName: 'addContact',
-        args: [
-          contactAddress as `0x${string}`,
-          firstName,
-          lastName,
-          email,
-          phone,
-          hasVotingRight,
-          authorizedVaults
-        ],
-      });
-
-      console.log('Contact creation transaction result:', result);
-      
-      // Call the original onSubmit for UI updates
-      onSubmit({
+      // Call the parent's onSubmit handler (which will handle the contract call)
+      await onSubmit({
         firstName,
         lastName,
         email,
