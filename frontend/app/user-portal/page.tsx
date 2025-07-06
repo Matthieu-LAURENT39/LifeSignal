@@ -138,6 +138,7 @@ export default function UserPortal() {
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
   const [newlyCreatedContacts, setNewlyCreatedContacts] = useState<Contact[]>([]);
   const [tooltipVisible, setTooltipVisible] = useState<string | null>(null);
+  const [tooltipTimeout, setTooltipTimeout] = useState<NodeJS.Timeout | null>(null);
 
   const searchParams = useSearchParams();
   const isDebugMode = searchParams.get('debug') === 'true';
@@ -254,6 +255,15 @@ export default function UserPortal() {
       }
     }
   }, [contactListDetails]);
+
+  // Cleanup tooltip timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeout) {
+        clearTimeout(tooltipTimeout);
+      }
+    };
+  }, [tooltipTimeout]);
 
   // Function to get contact display data
   const getContactDisplayData = (contactAddr: string, index: number) => {
@@ -1092,8 +1102,17 @@ export default function UserPortal() {
                             {f.cid && (
                               <div className="relative">
                                 <button
-                                  onMouseEnter={() => setTooltipVisible(f.id)}
-                                  onMouseLeave={() => setTooltipVisible(null)}
+                                  onMouseEnter={() => {
+                                    if (tooltipTimeout) {
+                                      clearTimeout(tooltipTimeout);
+                                      setTooltipTimeout(null);
+                                    }
+                                    setTooltipVisible(f.id);
+                                  }}
+                                  onMouseLeave={() => {
+                                    const timeout = setTimeout(() => setTooltipVisible(null), 100);
+                                    setTooltipTimeout(timeout);
+                                  }}
                                   onClick={() => setTooltipVisible(tooltipVisible === f.id ? null : f.id)}
                                   className="w-4 h-4 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-white/40 hover:text-white/60 transition-colors"
                                   title="View Walrus Blob ID"
@@ -1105,8 +1124,17 @@ export default function UserPortal() {
                                 {tooltipVisible === f.id && (
                                   <div 
                                     className="fixed z-[100] top-1/4 left-1/2 transform -translate-x-1/2 bg-gray-900 border border-gray-600 rounded-lg p-4 min-w-[350px] shadow-2xl"
-                                    onMouseEnter={() => setTooltipVisible(f.id)}
-                                    onMouseLeave={() => setTooltipVisible(null)}
+                                    onMouseEnter={() => {
+                                      if (tooltipTimeout) {
+                                        clearTimeout(tooltipTimeout);
+                                        setTooltipTimeout(null);
+                                      }
+                                      setTooltipVisible(f.id);
+                                    }}
+                                    onMouseLeave={() => {
+                                      const timeout = setTimeout(() => setTooltipVisible(null), 200);
+                                      setTooltipTimeout(timeout);
+                                    }}
                                   >
                                     <p className="text-gray-300 text-xs mb-2">Walrus Blob ID:</p>
                                     <div className="flex items-center gap-2 mb-3">
