@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
-import { useLifeSignalRegistryWrite, contractUtils, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
+import { useContractWrite, CONTRACT_ADDRESSES, LIFE_SIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import { useReadContract } from 'wagmi';
 import type { Vault, VaultFile, Contact } from '../types/models';
 
@@ -96,7 +96,7 @@ const uploadToWalrus = async (encryptedData: ArrayBuffer, filename: string): Pro
 
 export default function VaultManager({ className = '', onVaultSelect }: VaultManagerProps) {
   const { address, isConnected } = useAccount();
-  const { writeContract, isPending, error: writeError } = useLifeSignalRegistryWrite();
+  const { writeContract, isPending, error: writeError } = useContractWrite();
 
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [selectedVault, setSelectedVault] = useState<Vault | null>(null);
@@ -124,7 +124,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
   // Get detailed vault list using wagmi v2 hooks
   const { data: vaultListDetails, error: vaultListDetailsError } = useReadContract({
     address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-    abi: LIFESIGNAL_REGISTRY_ABI,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
     functionName: 'getOwnerVaultListDetails',
     args: address ? [address] : undefined,
     query: {
@@ -183,7 +183,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
                 
                 const fileInfo = await readContract(config, {
                   address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-                  abi: LIFESIGNAL_REGISTRY_ABI,
+                  abi: LIFE_SIGNAL_REGISTRY_ABI,
                   functionName: 'getVaultFileInfo',
                   args: [vaultId, fileId],
                 });
@@ -241,7 +241,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
   // Get detailed contact list using wagmi v2 hooks
   const { data: contactListDetails, error: contactListDetailsError } = useReadContract({
     address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-    abi: LIFESIGNAL_REGISTRY_ABI,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
     functionName: 'getContactListDetails',
     args: address ? [address] : undefined,
     query: {
@@ -310,7 +310,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
 
       writeContract({
         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-        abi: LIFESIGNAL_REGISTRY_ABI,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
         functionName: 'createVault',
         args: [newVault.name, iv, encryptionKey],
       });
@@ -414,7 +414,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
           const fileId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           await writeContract({
             address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-            abi: LIFESIGNAL_REGISTRY_ABI,
+            abi: LIFE_SIGNAL_REGISTRY_ABI,
             functionName: 'addVaultFile',
             args: [BigInt(selectedVault.id), file.name, file.type, blobId, new Date().toISOString()],
           });
@@ -455,7 +455,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
     try {
       writeContract({
         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY as any,
-        abi: LIFESIGNAL_REGISTRY_ABI as any,
+        abi: LIFE_SIGNAL_REGISTRY_ABI as any,
         functionName: 'releaseVault',
         args: [BigInt(vaultId) as any],
       });
@@ -852,7 +852,7 @@ export default function VaultManager({ className = '', onVaultSelect }: VaultMan
                         for (const contactAddr of contactsToAuthorize) {
                           await writeContract({
                             address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY as any,
-                            abi: LIFESIGNAL_REGISTRY_ABI as any,
+                            abi: LIFE_SIGNAL_REGISTRY_ABI as any,
                             functionName: 'authorizeVaultContact',
                             args: [BigInt(selectedVault.id), contactAddr],
                           });

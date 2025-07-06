@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount, useReadContract } from 'wagmi';
 import { decryptFile } from '../lib/crypto/encryption';
-import { CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
+import { CONTRACT_ADDRESSES, LIFE_SIGNAL_REGISTRY_ABI } from '../lib/contracts';
 
 // Web Crypto API decryption function to match the encryption method used in VaultManager
 const decryptFileWebCrypto = async (

@@ -8,16 +8,17 @@ async function main() {
   console.log("📝 Deploying with account:", deployer.address);
 
   // Get account balance
-  const balance = await deployer.getBalance();
-  console.log("💰 Account balance:", hre.ethers.utils.formatEther(balance), "ETH");
+  const balance = await hre.ethers.provider.getBalance(deployer.address);
+  console.log("💰 Account balance:", hre.ethers.formatEther(balance), "ETH");
 
   // Deploy LifeSignalRegistry
   console.log("\n📦 Deploying LifeSignalRegistry...");
   const LifeSignalRegistry = await hre.ethers.getContractFactory("LifeSignalRegistry");
   const lifeSignalRegistry = await LifeSignalRegistry.deploy();
-  await lifeSignalRegistry.deployed();
+  await lifeSignalRegistry.waitForDeployment();
 
-  console.log("✅ LifeSignalRegistry deployed to:", lifeSignalRegistry.address);
+  const contractAddress = await lifeSignalRegistry.getAddress();
+  console.log("✅ LifeSignalRegistry deployed to:", contractAddress);
 
   // Save deployment addresses
   const deploymentInfo = {
@@ -25,7 +26,7 @@ async function main() {
     chainId: hre.network.config.chainId,
     deployer: deployer.address,
     contracts: {
-      LifeSignalRegistry: lifeSignalRegistry.address,
+      LifeSignalRegistry: contractAddress,
     },
     timestamp: new Date().toISOString(),
   };
@@ -36,12 +37,12 @@ async function main() {
   // Verify contracts if not on local network
   if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
     console.log("\n⏳ Waiting for block confirmations...");
-    await lifeSignalRegistry.deployTransaction.wait(5);
+    await lifeSignalRegistry.deploymentTransaction().wait(5);
 
     console.log("🔍 Verifying contract on block explorer...");
     try {
       await hre.run("verify:verify", {
-        address: lifeSignalRegistry.address,
+        address: contractAddress,
         constructorArguments: [],
       });
       console.log("✅ Contract verified successfully");
@@ -52,7 +53,7 @@ async function main() {
 
   console.log("\n🎉 Deployment completed!");
   console.log("📝 Save these addresses for your frontend configuration:");
-  console.log(`LIFE_SIGNAL_REGISTRY_ADDRESS="${lifeSignalRegistry.address}"`);
+  console.log(`LIFE_SIGNAL_REGISTRY_ADDRESS="${contractAddress}"`);
 }
 
 main()

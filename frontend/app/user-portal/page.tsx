@@ -11,9 +11,8 @@ import VaultCreator from '../../components/VaultCreator';
 import ContactCreator from '../../components/ContactCreator';
 import OwnerRegistration from '../../components/OwnerRegistration';
 import VaultManager from '../../components/VaultManager';
-import { useLifeSignalRegistryRead, useLifeSignalRegistryWrite } from '../../lib/contracts';
-import { contractUtils } from '../../lib/contracts';
-import { decryptFile } from '../../lib/crypto/encryption';
+import { useContractRead, useContractWrite, CONTRACT_ADDRESSES, LIFE_SIGNAL_REGISTRY_ABI } from '../../lib/contracts';
+import { useReadContract, useWriteContract } from 'wagmi';
 
 // Web Crypto API decryption function to match the encryption method used in VaultManager
 const decryptFileWebCrypto = async (
@@ -96,35 +95,162 @@ const decryptFileWebCrypto = async (
   }
 };
 
+// Grace Period Timer Component
+const GracePeriodTimer: React.FC<{ gracePeriodEnd: number; onHeartbeatSent: () => void }> = ({ gracePeriodEnd, onHeartbeatSent }) => {
+  const { address } = useAccount();
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [message, setMessage] = useState<string>('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
+  const { writeContract, isPending, error } = useWriteContract();
+
+  useEffect(() => {
+    if (!gracePeriodEnd) return;
+
+    const updateTimer = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = gracePeriodEnd - now;
+      setTimeLeft(Math.max(0, remaining));
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [gracePeriodEnd]);
+
+  const handleSendHeartbeat = async () => {
+    if (!address) return;
+
+    try {
+      setMessage('');
+      setMessageType('');
+
+      await writeContract({
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
+        functionName: 'sendHeartbeat',
+        args: [],
+      });
+
+      setMessage('Heartbeat sent successfully! You have proven you are alive.');
+      setMessageType('success');
+      onHeartbeatSent();
+    } catch (error: any) {
+      console.error('Error sending heartbeat:', error);
+      setMessage(error.message || 'Failed to send heartbeat');
+      setMessageType('error');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-red-900/90 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-red-50 border border-red-200 rounded-2xl p-8 max-w-md w-full">
+        <div className="text-center">
+          <div className="mb-6">
+            <h2 className="text-3xl font-bold text-red-800 mb-2">🚨 EMERGENCY ALERT 🚨</h2>
+            <p className="text-red-700 text-lg">
+              Your contacts have declared you deceased!
+            </p>
+          </div>
+
+          <div className="mb-6">
+            <div className="text-4xl font-bold text-red-800 mb-2">
+              {timeLeft > 0 ? `${timeLeft}s` : 'TIME UP!'}
+            </div>
+            <div className="w-full bg-red-200 rounded-full h-4">
+              <div 
+                className="bg-red-500 h-4 rounded-full transition-all duration-1000"
+                style={{ width: `${Math.max(0, (timeLeft / 30) * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <p className="text-red-700 mb-4">
+              You have {timeLeft > 0 ? `${timeLeft} seconds` : 'NO TIME'} remaining to prove you are alive.
+              Click the button below to send a heartbeat and cancel the death declaration.
+            </p>
+          </div>
+
+          <button
+            onClick={handleSendHeartbeat}
+            disabled={isPending || timeLeft <= 0}
+            className={`w-full px-8 py-4 rounded-lg font-bold text-xl transition-all ${
+              timeLeft <= 0 
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                : 'bg-green-600 hover:bg-green-700 text-white transform hover:scale-105'
+            }`}
+          >
+            {isPending ? 'SENDING...' : "I'M ALIVE!"}
+          </button>
+
+          {message && (
+            <div className={`mt-4 p-3 rounded-lg ${
+              messageType === 'success' 
+                ? 'bg-green-100 text-green-800 border border-green-200' 
+                : 'bg-red-100 text-red-800 border border-red-200'
+            }`}>
+              {message}
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-4 p-3 bg-red-100 text-red-800 border border-red-200 rounded-lg">
+              Error: {error.message}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function UserPortal() {
   const { address, isConnected } = useAccount();
-  const { data: ownerInfo, error: ownerError, isLoading: ownerLoading } = useLifeSignalRegistryRead(
-    'getOwnerInfo', 
-    address ? [address] : undefined, 
-    {
-    enabled: !!address && isConnected,
-    }
-  );
-  
-  // Get detailed vault list from blockchain
-  const { data: vaultListDetails, error: vaultListDetailsError, isLoading: vaultListDetailsLoading } = useLifeSignalRegistryRead(
-    'getOwnerVaultListDetails',
-    address ? [address] : undefined,
-    {
+  const { data: ownerInfo, error: ownerError, isLoading: ownerLoading } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getOwnerInfo',
+    args: address ? [address] : undefined,
+    query: {
       enabled: !!address && isConnected,
     }
-  );
+  });
+
+  // Add death status monitoring for grace period detection
+  const { data: deathStatusData, refetch: refetchDeathStatus } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getDeathDeclarationStatus',
+    args: address ? [address as `0x${string}`] : undefined,
+    query: {
+      enabled: !!address && isConnected,
+    }
+  });
+  
+  // Get detailed vault list from blockchain
+  const { data: vaultListDetails, error: vaultListDetailsError, isLoading: vaultListDetailsLoading } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getOwnerVaultListDetails',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && isConnected,
+    }
+  });
   
   // Get detailed contact list from blockchain
-  const { data: contactListDetails, error: contactListDetailsError, isLoading: contactListDetailsLoading } = useLifeSignalRegistryRead(
-    'getContactListDetails',
-    address ? [address] : undefined,
-    {
+  const { data: contactListDetails, error: contactListDetailsError, isLoading: contactListDetailsLoading } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getContactListDetails',
+    args: address ? [address] : undefined,
+    query: {
       enabled: !!address && isConnected && !!ownerInfo && (ownerInfo as any)[5], // exists is the 6th element
     }
-  );
+  });
   
-  const { writeContract, isPending } = useLifeSignalRegistryWrite();
+  const { writeContract, isPending } = useWriteContract();
   const [currentUser, setCurrentUser] = useState<Owner | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVault, setSelectedVault] = useState<Vault | null>(null);
@@ -138,58 +264,61 @@ export default function UserPortal() {
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
   const [newlyCreatedContacts, setNewlyCreatedContacts] = useState<Contact[]>([]);
   const [tooltipVisible, setTooltipVisible] = useState<string | null>(null);
+  
+  // Death status state
+  const [deathStatus, setDeathStatus] = useState<{
+    isActive: boolean;
+    isDeceased: boolean;
+    votesFor: number;
+    votesAgainst: number;
+    totalVotingContacts: number;
+    consensusReached: boolean;
+    isInGracePeriod: boolean;
+    gracePeriodEnd: number;
+  } | null>(null);
+  const [isAccessBlocked, setIsAccessBlocked] = useState(false);
 
   const searchParams = useSearchParams();
-  const isDebugMode = searchParams.get('debug') === 'true';
+  const isDebugMode = searchParams?.get('debug') === 'true';
 
-  // State to store fetched contact details
-  const [contactDetails, setContactDetails] = useState<Record<string, any>>({});
-  const [isLoadingContactDetails, setIsLoadingContactDetails] = useState(false);
+  // Process death status data
+  useEffect(() => {
+    if (deathStatusData) {
+      const [isActive, isDeceased, votesFor, votesAgainst, totalVotingContacts, consensusReached, isInGracePeriod, gracePeriodEnd] = deathStatusData as unknown as any[];
+      const deathInfo = {
+        isActive,
+        isDeceased,
+        votesFor: Number(votesFor),
+        votesAgainst: Number(votesAgainst),
+        totalVotingContacts: Number(totalVotingContacts),
+        consensusReached,
+        isInGracePeriod,
+        gracePeriodEnd: Number(gracePeriodEnd)
+      };
+      setDeathStatus(deathInfo);
 
-  // Function to fetch contact details for all contacts
-  const fetchContactDetails = async (contactAddresses: string[]) => {
-    if (!contactAddresses || contactAddresses.length === 0) return;
-    
-    setIsLoadingContactDetails(true);
-    const details: Record<string, any> = {};
-
-    try {
-      for (const contactAddr of contactAddresses) {
-        try {
-          const contactInfo = await contractUtils.getContactInfo(
-            // We need to pass a readContract function here
-            // For now, we'll use the useLifeSignalRegistryRead hook pattern
-            null as any, // This should be the readContract function
-            address!,
-            contactAddr
-          );
-          
-          if (contactInfo) {
-            details[contactAddr] = contactInfo;
-          }
-        } catch (error) {
-          console.error(`Error fetching details for contact ${contactAddr}:`, error);
+      // Check if grace period has expired - if so, block access
+      if (isInGracePeriod) {
+        const now = Math.floor(Date.now() / 1000);
+        const timeLeft = Number(gracePeriodEnd) - now;
+        if (timeLeft <= 0) {
+          setIsAccessBlocked(true);
         }
+      } else if (isDeceased) {
+        setIsAccessBlocked(true);
       }
-      
-      setContactDetails(details);
-    } catch (error) {
-      console.error('Error fetching contact details:', error);
-    } finally {
-      setIsLoadingContactDetails(false);
     }
+  }, [deathStatusData]);
+
+  const handleHeartbeatSent = () => {
+    setIsAccessBlocked(false);
+    setDeathStatus(null);
+    refetchDeathStatus();
   };
 
-  // Custom hook to fetch contact details
-  const useContactDetail = (contactAddress: string) => {
-    return useLifeSignalRegistryRead(
-      'getContactInfo',
-      address && contactAddress ? [address, contactAddress] : undefined,
-      {
-        enabled: !!address && !!contactAddress && isConnected,
-      }
-    );
-  };
+
+
+
 
 
 
@@ -255,34 +384,7 @@ export default function UserPortal() {
     }
   }, [contactListDetails]);
 
-  // Function to get contact display data
-  const getContactDisplayData = (contactAddr: string, index: number) => {
-    // Check if we have contact details for this address
-    const contactDetail = contactDetails[contactAddr];
-    console.log("getContactDisplayData")
-    console.log(contactDetail)
-    if (contactDetail) {
-      // Return real contact data from blockchain
-      return {
-        firstName: contactDetail.firstName || `Contact ${index + 1}`,
-        lastName: contactDetail.lastName || '',
-        email: contactDetail.email || 'contact@example.com',
-        phone: contactDetail.phone || '+1234567890',
-        hasVotingRight: contactDetail.hasVotingRight || false,
-        isIdVerified: contactDetail.isVerified || false
-      };
-    } else {
-      // Return placeholder data
-      return {
-        firstName: `Contact`,
-        lastName: `${index + 1}`,
-        email: 'contact@example.com',
-        phone: '+1234567890',
-        hasVotingRight: false,
-        isIdVerified: false
-      };
-    }
-  };
+
 
   // Function to build user data from blockchain data
   const buildUserDataFromBlockchain = (ownerAddr: string, firstName: string, lastName: string, vaultDetails: any, graceIntervalDays: number = 30, contactDetails: any): Owner => {
@@ -542,19 +644,41 @@ export default function UserPortal() {
     try {
       console.log('Creating contact with data:', { firstName, lastName, email, phone, contactAddress, hasVotingRight, selectedVaultAddresses });
       
-      // Use the contract utility to add contact with authorized vaults
-      const hash = await contractUtils.addContact(
-        writeContract,
-        contactAddress,
-        firstName,
-        lastName,
-        email,
-        phone,
-        hasVotingRight,
-        selectedVaultAddresses.map(vaultId => BigInt(vaultId))
-      );
+      // Pre-validation checks
+      console.log('=== PRE-VALIDATION CHECKS ===');
       
-      console.log('Contact created successfully:', hash);
+      // Check if trying to add yourself
+      if (contactAddress.toLowerCase() === address.toLowerCase()) {
+        throw new Error('Cannot add yourself as a contact');
+      }
+      
+      console.log('Pre-validation checks passed');
+      console.log('=== END PRE-VALIDATION ===');
+      
+      // Add contact with authorized vaults using writeContract
+      await writeContract({
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
+        functionName: 'addContact',
+        args: [
+          contactAddress as `0x${string}`,
+          firstName,
+          lastName,
+          email,
+          phone,
+          hasVotingRight,
+          selectedVaultAddresses.map(vaultId => BigInt(vaultId))
+        ],
+      });
+      
+      // Log contract information
+      console.log('=== CONTRACT INFORMATION ===');
+      console.log('Contract Address:', CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY);
+      console.log('Contract Function:', 'addContact');
+      console.log('Network:', 'Ethereum');
+      console.log('Contact Address:', contactAddress);
+      console.log('Authorized Vaults:', selectedVaultAddresses);
+      console.log('=== END CONTRACT INFO ===');
       
       // Add the new contact to local state for immediate display
       if (currentUser) {
@@ -578,7 +702,42 @@ export default function UserPortal() {
       console.log('Contact created successfully on blockchain');
       
     } catch (error) {
+      console.error('=== CONTACT CREATION ERROR ===');
       console.error('Error creating contact:', error);
+      
+      // Extract meaningful error message
+      let errorMessage = 'Unknown error occurred';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Check for common revert reasons
+        if (errorMessage.includes('Owner not registered')) {
+          errorMessage = 'Owner not registered. Please register first.';
+        } else if (errorMessage.includes('Contact already exists')) {
+          errorMessage = 'This contact address is already registered.';
+        } else if (errorMessage.includes('Cannot add yourself')) {
+          errorMessage = 'You cannot add yourself as a contact.';
+        } else if (errorMessage.includes('Vault does not exist')) {
+          errorMessage = 'One or more selected vaults do not exist.';
+        } else if (errorMessage.includes('Not vault owner')) {
+          errorMessage = 'You are not the owner of one or more selected vaults.';
+        } else if (errorMessage.includes('Contact already authorized')) {
+          errorMessage = 'Contact is already authorized for one or more selected vaults.';
+        } else if (errorMessage.includes('user rejected') || errorMessage.includes('User denied')) {
+          errorMessage = 'Transaction was rejected by user.';
+        } else if (errorMessage.includes('insufficient funds')) {
+          errorMessage = 'Insufficient funds to complete the transaction.';
+        } else if (errorMessage.includes('Internal JSON-RPC error')) {
+          errorMessage = 'Transaction failed during execution. Please check the contract requirements.';
+        }
+      }
+      
+      console.error('Processed error message:', errorMessage);
+      console.error('=== END ERROR INFO ===');
+      
+      // Show error to user
+      alert(`Failed to create contact: ${errorMessage}`);
     }
   };
 
@@ -601,29 +760,29 @@ export default function UserPortal() {
       // Use readContract from wagmi to get vault and file info
       const { readContract } = await import('wagmi/actions');
       const { config } = await import('../../lib/wagmi');
-      const { LIFESIGNAL_REGISTRY_ABI, CONTRACT_ADDRESSES } = await import('../../lib/contracts');
+      const { LIFE_SIGNAL_REGISTRY_ABI, CONTRACT_ADDRESSES } = await import('../../lib/contracts');
 
-      // Get vault info from smart contract to get encryption key and IV
-      const vaultInfo = await readContract(config, {
-        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-        abi: LIFESIGNAL_REGISTRY_ABI,
-        functionName: 'getVaultInfo',
-        args: [BigInt(vaultId)],
-      });
-      
-      if (!vaultInfo) {
-        throw new Error('Could not retrieve vault information');
-      }
+              // Get vault info from smart contract to get encryption key and IV
+        const vaultInfo = await readContract(config, {
+          address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+          abi: LIFE_SIGNAL_REGISTRY_ABI,
+          functionName: 'getVaultInfo',
+          args: [BigInt(vaultId)],
+        });
+        
+        if (!vaultInfo) {
+          throw new Error('Could not retrieve vault information');
+        }
 
-      console.log('Vault info retrieved:', vaultInfo);
+        console.log('Vault info retrieved:', vaultInfo);
 
-      // Get file info from smart contract to get CID
-      const fileInfo = await readContract(config, {
-        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-        abi: LIFESIGNAL_REGISTRY_ABI,
-        functionName: 'getVaultFileInfo',
-        args: [BigInt(vaultId), BigInt(fileId)],
-      });
+        // Get file info from smart contract to get CID
+        const fileInfo = await readContract(config, {
+          address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+          abi: LIFE_SIGNAL_REGISTRY_ABI,
+          functionName: 'getVaultFileInfo',
+          args: [BigInt(vaultId), BigInt(fileId)],
+        });
 
       if (!fileInfo) {
         throw new Error('Could not retrieve file information');
@@ -807,8 +966,24 @@ export default function UserPortal() {
     );
   }
 
-  // Add dead status check
-  if (currentUser?.status === 'dead') {
+  // Show grace period timer if owner is in grace period
+  if (deathStatus?.isInGracePeriod && !isAccessBlocked) {
+    return (
+      <>
+        <GracePeriodTimer 
+          gracePeriodEnd={deathStatus.gracePeriodEnd}
+          onHeartbeatSent={handleHeartbeatSent}
+        />
+        {/* Still show the normal portal behind the timer */}
+        <div className="blur-sm pointer-events-none">
+          {/* Normal portal content would go here but blurred and disabled */}
+        </div>
+      </>
+    );
+  }
+
+  // Show access blocked if grace period expired or user is deceased
+  if (isAccessBlocked || deathStatus?.isDeceased) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         {/* Background decoration */}
@@ -817,17 +992,22 @@ export default function UserPortal() {
           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
         </div>
 
-        {/* Dead Status Message */}
+        {/* Access Blocked Message */}
         <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
           <div className="text-center">
             <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <span className="text-5xl">💀</span>
             </div>
             <h1 className="text-4xl md:text-6xl font-bold text-red-400 mb-4">
-              You Are Dead
+              Access Denied
             </h1>
-            <p className="text-xl text-white/60">
-              Your vaults have been released to your heirs
+            <p className="text-xl text-white/60 mb-4">
+              {deathStatus?.isDeceased 
+                ? "You have been declared deceased. Your vaults have been released to your heirs."
+                : "Grace period has expired. Your vaults have been released to your heirs."}
+            </p>
+            <p className="text-sm text-white/40">
+              If this is an error, contact your heirs to reverse the death declaration.
             </p>
           </div>
         </div>
@@ -939,35 +1119,27 @@ export default function UserPortal() {
             </p>
 
             {/* Status Warning Banner */}
-            {isUserInDangerousState && (
-              <div className="mt-6 backdrop-blur-md bg-red-500/10 border border-red-500/20 rounded-2xl p-6 max-w-2xl mx-auto">
+            {deathStatus?.isActive && !deathStatus?.isInGracePeriod && (
+              <div className="mt-6 backdrop-blur-md bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-6 max-w-2xl mx-auto">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-12 h-12 bg-yellow-500/20 rounded-full flex items-center justify-center flex-shrink-0">
                     <span className="text-2xl">⚠️</span>
                   </div>
                   <div className="flex-1 text-left">
-                    <h3 className="text-lg font-semibold text-red-400">Death Declaration in Progress</h3>
+                    <h3 className="text-lg font-semibold text-yellow-400">Death Declaration in Progress</h3>
                     <p className="text-white/70 text-sm mt-1">
-                      {currentUser?.status === 'voting_in_progress' 
-                        ? `Your contacts have initiated a death declaration process. If you&apos;re seeing this, please confirm you&apos;re alive.`
-                        : `You are in a grace period. Please confirm you&apos;re alive to prevent vault release.`}
+                      Your contacts have initiated a death declaration process. 
+                      Voting is currently in progress ({deathStatus.votesFor}/{deathStatus.totalVotingContacts} votes for death).
+                      You can still access your account normally.
                     </p>
                   </div>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowAliveConfirm(true)}
-                    className="px-6 py-3 bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-xl backdrop-blur-md border border-white/20 shadow-lg whitespace-nowrap"
-                  >
-                    I&apos;m Alive
-                  </motion.button>
                 </div>
               </div>
             )}
           </div>
           
-          {/* Only show the rest of the content if not in dangerous state */}
-          {!isUserInDangerousState && (
+          {/* Only show the rest of the content if not in grace period or deceased */}
+          {!deathStatus?.isInGracePeriod && !deathStatus?.isDeceased && !isAccessBlocked && (
             <>
               {/* Quick Stats */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -1283,7 +1455,7 @@ export default function UserPortal() {
       )}
 
       {/* Vault Creator Modal */}
-      {!isUserInDangerousState && (
+      {!deathStatus?.isInGracePeriod && !deathStatus?.isDeceased && !isAccessBlocked && (
         <VaultCreator
           isOpen={isVaultCreatorOpen}
           onClose={() => setIsVaultCreatorOpen(false)}

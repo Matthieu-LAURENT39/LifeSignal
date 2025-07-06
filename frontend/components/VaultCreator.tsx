@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAccount } from 'wagmi';
-import { useLifeSignalRegistryWrite, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
+import { useContractWrite, CONTRACT_ADDRESSES, LIFE_SIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import type { User, VaultFile, Contact } from '../types/models';
 
 interface VaultCreatorProps {
@@ -117,7 +117,7 @@ const uploadToWalrus = async (encryptedData: ArrayBuffer, filename: string): Pro
 
 export default function VaultCreator({ isOpen, onClose, onSubmit, availableContacts }: VaultCreatorProps) {
   const { address, isConnected } = useAccount();
-  const { writeContract, isPending, error: writeError } = useLifeSignalRegistryWrite();
+  const { writeContract, isPending, error: writeError } = useContractWrite();
   
   // Debug logging
   console.log('VaultCreator state:', { isConnected, address, writeContract, isPending, writeError });
@@ -230,7 +230,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
       });
 
       // Create vault on blockchain using smart contract
-      console.log('Calling contractUtils.createVault...');
+      console.log('Calling createVault...');
       console.log('Contract address:', CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY);
       console.log('writeContract function:', typeof writeContract);
       
@@ -249,7 +249,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
         
         const result = await writeContract({
           address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-          abi: LIFESIGNAL_REGISTRY_ABI,
+          abi: LIFE_SIGNAL_REGISTRY_ABI,
           functionName: 'createVault',
           args: [name, cypherIV, exportedKey],
         });
@@ -375,7 +375,7 @@ export default function VaultCreator({ isOpen, onClose, onSubmit, availableConta
                     try {
                       await writeContract({
                         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-                        abi: LIFESIGNAL_REGISTRY_ABI,
+                        abi: LIFE_SIGNAL_REGISTRY_ABI,
                         functionName: 'sendHeartbeat',
                         args: [],
                       });

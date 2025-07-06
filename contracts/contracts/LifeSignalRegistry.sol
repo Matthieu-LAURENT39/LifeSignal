@@ -75,6 +75,8 @@ contract LifeSignalRegistry {
         uint256 totalVotingContacts;
         bool isActive;
         bool consensusReached;
+        uint256 gracePeriodEnd; // Timestamp when grace period ends
+        bool isInGracePeriod; // True when consensus reached but grace period active
         mapping(address => bool) hasVoted;
         mapping(address => bool) vote; // true = for death, false = against
     }
@@ -97,6 +99,7 @@ contract LifeSignalRegistry {
     event DeathDeclared(address indexed owner, address indexed declaredBy, uint256 timestamp);
     event VoteCast(address indexed owner, address indexed voter, bool vote);
     event ConsensusReached(address indexed owner, bool isDeceased, uint256 timestamp);
+    event GracePeriodStarted(address indexed owner, uint256 gracePeriodEnd);
     event VaultCreated(uint256 indexed vaultId, address indexed owner, string name);
     event VaultFileAdded(uint256 indexed vaultId, uint256 fileId, string originalName);
     event VaultReleased(uint256 indexed vaultId, address indexed owner);
@@ -121,7 +124,8 @@ contract LifeSignalRegistry {
 
     modifier onlyVotingContact(address owner) {
         require(contacts[owner][msg.sender].exists, "Not a contact of this owner");
-        require(contacts[owner][msg.sender].isVerified, "Contact not verified");
+        // Removed verification requirement for POC
+        // require(contacts[owner][msg.sender].isVerified, "Contact not verified");
         require(contacts[owner][msg.sender].hasVotingRight, "No voting rights");
         _;
     }
@@ -202,7 +206,7 @@ contract LifeSignalRegistry {
             email: _email,
             phone: _phone,
             hasVotingRight: _hasVotingRight,
-            isVerified: false,
+            isVerified: true, // Auto-verified for POC
             exists: true,
             authorizedVaults: new uint256[](0)
         });
@@ -272,9 +276,14 @@ contract LifeSignalRegistry {
         
         owners[msg.sender].lastHeartbeat = block.timestamp;
         
-        // Cancel any active death declaration
-        if (deathDeclarations[msg.sender].isActive) {
-            deathDeclarations[msg.sender].isActive = false;
+        DeathDeclaration storage declaration = deathDeclarations[msg.sender];
+        
+        // Cancel any active death declaration or grace period
+        if (declaration.isActive || declaration.isInGracePeriod) {
+            declaration.isActive = false;
+            declaration.isInGracePeriod = false;
+            declaration.consensusReached = false;
+            declaration.gracePeriodEnd = 0;
             emit ConsensusReached(msg.sender, false, block.timestamp);
         }
 
@@ -293,8 +302,8 @@ contract LifeSignalRegistry {
         uint256 votingContacts = 0;
         for (uint i = 0; i < owners[_owner].contactList.length; i++) {
             address contactAddr = owners[_owner].contactList[i];
-            if (contacts[_owner][contactAddr].isVerified && 
-                contacts[_owner][contactAddr].hasVotingRight) {
+            // Removed verification requirement for POC - only check voting rights
+            if (contacts[_owner][contactAddr].hasVotingRight) {
                 votingContacts++;
             }
         }
@@ -310,6 +319,8 @@ contract LifeSignalRegistry {
         declaration.totalVotingContacts = votingContacts;
         declaration.isActive = true;
         declaration.consensusReached = false;
+        declaration.isInGracePeriod = false;
+        declaration.gracePeriodEnd = 0;
         declaration.hasVoted[msg.sender] = true;
         declaration.vote[msg.sender] = true;
 
@@ -342,23 +353,51 @@ contract LifeSignalRegistry {
     }
 
     /**
+     * @dev Finalize death declaration after grace period expires
+     */
+    function finalizeDeathDeclaration(address _owner) external {
+        DeathDeclaration storage declaration = deathDeclarations[_owner];
+        require(declaration.isInGracePeriod, "Not in grace period");
+        require(block.timestamp >= declaration.gracePeriodEnd, "Grace period not yet expired");
+        require(!owners[_owner].isDeceased, "Owner already deceased");
+
+        // Finalize death
+        owners[_owner].isDeceased = true;
+        declaration.isActive = false;
+        declaration.isInGracePeriod = false;
+        
+        emit ConsensusReached(_owner, true, block.timestamp);
+    }
+
+    /**
+     * @dev Check if grace period has expired and auto-finalize if needed
+     */
+    function checkGracePeriodExpiry(address _owner) external view returns (bool expired, bool canFinalize) {
+        DeathDeclaration storage declaration = deathDeclarations[_owner];
+        expired = declaration.isInGracePeriod && block.timestamp >= declaration.gracePeriodEnd;
+        canFinalize = expired && !owners[_owner].isDeceased;
+        return (expired, canFinalize);
+    }
+
+    /**
      * @dev Internal function to check if consensus is reached
      */
     function _checkConsensus(address _owner) internal {
         DeathDeclaration storage declaration = deathDeclarations[_owner];
-        // uint256 totalVotes = declaration.votesFor + declaration.votesAgainst;
         uint256 requiredVotes = (declaration.totalVotingContacts * 50) / 100 + 1; // Majority
 
         if (declaration.votesFor >= requiredVotes) {
-            // Death confirmed
-            owners[_owner].isDeceased = true;
-            declaration.isActive = false;
+            // Death consensus reached - start 30 second grace period
             declaration.consensusReached = true;
+            declaration.isInGracePeriod = true;
+            declaration.gracePeriodEnd = block.timestamp + 30; // 30 second grace period
             emit ConsensusReached(_owner, true, block.timestamp);
+            emit GracePeriodStarted(_owner, declaration.gracePeriodEnd);
         } else if (declaration.votesAgainst >= requiredVotes) {
             // Death rejected
             declaration.isActive = false;
             declaration.consensusReached = true;
+            declaration.isInGracePeriod = false;
             emit ConsensusReached(_owner, false, block.timestamp);
         }
         // If neither condition is met, voting continues
@@ -409,20 +448,24 @@ contract LifeSignalRegistry {
 
     function getDeathDeclarationStatus(address _owner) external view returns (
         bool isActive,
-        uint256 startTime,
+        bool isDeceased,
         uint256 votesFor,
         uint256 votesAgainst,
         uint256 totalVotingContacts,
-        bool consensusReached
+        bool consensusReached,
+        bool isInGracePeriod,
+        uint256 gracePeriodEnd
     ) {
         DeathDeclaration storage declaration = deathDeclarations[_owner];
         return (
             declaration.isActive,
-            declaration.startTime,
+            owners[_owner].isDeceased,
             declaration.votesFor,
             declaration.votesAgainst,
             declaration.totalVotingContacts,
-            declaration.consensusReached
+            declaration.consensusReached,
+            declaration.isInGracePeriod,
+            declaration.gracePeriodEnd
         );
     }
 

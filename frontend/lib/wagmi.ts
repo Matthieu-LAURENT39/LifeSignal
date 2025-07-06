@@ -53,8 +53,16 @@ export const config = getDefaultConfig({
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'your-project-id',
   chains: [sapphireTestnet, sapphireMainnet],
   transports: {
-    [sapphireTestnet.id]: http(),
-    [sapphireMainnet.id]: http(),
+    [sapphireTestnet.id]: http('https://testnet.sapphire.oasis.dev', {
+      timeout: 20000,
+      retryCount: 3,
+      retryDelay: 1000,
+    }),
+    [sapphireMainnet.id]: http('https://sapphire.oasis.io', {
+      timeout: 20000,
+      retryCount: 3,
+      retryDelay: 1000,
+    }),
   },
   ssr: true,
 }); 

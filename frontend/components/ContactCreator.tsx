@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useAccount } from 'wagmi';
-import { useLifeSignalRegistryWrite, CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../lib/contracts';
+import { useContractWrite, CONTRACT_ADDRESSES, LIFE_SIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import type { Vault } from '../types/models';
 
 interface ContactCreatorProps {
@@ -21,7 +21,7 @@ interface ContactCreatorProps {
 
 export default function ContactCreator({ isOpen, onClose, onSubmit, availableVaults }: ContactCreatorProps) {
   const { address, isConnected } = useAccount();
-  const { writeContract, isPending, error: writeError } = useLifeSignalRegistryWrite();
+  const { writeContract, isPending, error: writeError } = useContractWrite();
   
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -88,7 +88,7 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
       // Call the smart contract
       const result = await writeContract({
         address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-        abi: LIFESIGNAL_REGISTRY_ABI,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
         functionName: 'addContact',
         args: [
           contactAddress as `0x${string}`,
@@ -102,6 +102,20 @@ export default function ContactCreator({ isOpen, onClose, onSubmit, availableVau
       });
 
       console.log('Contact creation transaction result:', result);
+      
+      // Log contract information
+      console.log('=== CONTRACT INFORMATION ===');
+      console.log('Contract Address:', CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY);
+      console.log('Contract Function:', 'addContact');
+      console.log('Transaction Hash:', result);
+      console.log('Network:', 'Ethereum');
+      console.log('Contact Address:', contactAddress);
+      console.log('Authorized Vaults:', selectedVaultAddresses);
+      console.log('Contact Name:', `${firstName} ${lastName}`);
+      console.log('Contact Email:', email);
+      console.log('Contact Phone:', phone);
+      console.log('Has Voting Right:', hasVotingRight);
+      console.log('=== END CONTRACT INFO ===');
       
       // Call the original onSubmit for UI updates
       onSubmit({

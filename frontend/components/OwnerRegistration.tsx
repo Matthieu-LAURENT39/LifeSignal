@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useAccount } from 'wagmi';
-import { useLifeSignalRegistryWrite, contractUtils } from '../lib/contracts';
+import { useAccount, useWriteContract } from 'wagmi';
+import { CONTRACT_ADDRESSES, LIFE_SIGNAL_REGISTRY_ABI } from '../lib/contracts';
 import { motion } from 'framer-motion';
 
 interface OwnerRegistrationProps {
@@ -12,7 +12,7 @@ interface OwnerRegistrationProps {
 
 export default function OwnerRegistration({ onRegistrationComplete, onCancel }: OwnerRegistrationProps) {
   const { address } = useAccount();
-  const { writeContract, isPending } = useLifeSignalRegistryWrite();
+  const { writeContract, isPending } = useWriteContract();
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -57,17 +57,21 @@ export default function OwnerRegistration({ onRegistrationComplete, onCancel }: 
     try {
       console.log('Registering owner with data...');
       
-      // Use the contract utility to register owner
-      const hash = await contractUtils.registerOwner(
-        writeContract,
-        formData.firstName,
-        formData.lastName,
-        formData.email,
-        formData.phone,
-        formData.graceInterval
-      );
+      // Register owner directly with writeContract
+      await writeContract({
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
+        functionName: 'registerOwner',
+        args: [
+          formData.firstName,
+          formData.lastName,
+          formData.email,
+          formData.phone,
+          BigInt(formData.graceInterval * 86400) // Convert days to seconds
+        ],
+      });
       
-      console.log('Owner registration successful:', hash);
+      console.log('Owner registration successful');
       onRegistrationComplete();
       
     } catch (err) {

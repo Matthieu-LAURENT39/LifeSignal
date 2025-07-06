@@ -2,529 +2,850 @@
 
 import { WalletConnectButton } from '../../components/WalletConnectButton';
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
-import { useReadContract } from 'wagmi';
-import type { Owner } from '../../types/models';
+import { useAccount, useReadContract, useWriteContract } from 'wagmi';
+import type { Owner as BaseOwner } from '../../types/models';
 import { useRouter } from 'next/navigation';
-import { CONTRACT_ADDRESSES, LIFESIGNAL_REGISTRY_ABI } from '../../lib/contracts';
+import { CONTRACT_ADDRESSES, LIFE_SIGNAL_REGISTRY_ABI } from '../../lib/contracts';
 
-// Mock data for testing
-const mockOwnerData: { [key: string]: Owner } = {
-  '0xowner1': {
-    id: 'owner1',
-    firstName: 'John',
-    lastName: 'Smith',
-    address: '0xowner1',
-    status: 'active',
-    graceInterval: 30,
-    isIdVerified: true,
-    hasVotingRight: false,
-    deathDeclaration: null,
-  },
-  '0xowner2': {
-    id: 'owner2',
-    firstName: 'Emma',
-    lastName: 'Wilson',
-    address: '0xowner2',
-    status: 'voting_in_progress',
-    graceInterval: 30,
-    isIdVerified: true,
-    hasVotingRight: false,
-    deathDeclaration: {
-      declaredBy: '0xHeir1',
-      declaredAt: new Date().toISOString(),
-      votes: [
-        { contactId: '0xHeir1', voted: true, votedAt: new Date().toISOString() },
-      ],
-      consensusReached: false,
-    },
-  }
-};
+interface Owner extends BaseOwner {
+  lastHeartbeat: number;
+  isDeceased: boolean;
+  exists: boolean;
+}
 
-const mockContactData: { [key: string]: { owner: Owner; hasVotingRight: boolean } } = {
-  '0xB4eC4cD11f19499aE5a5706c0f0e4293CF10e24A': {
-    owner: mockOwnerData['0xowner1'],
-    hasVotingRight: true
-  },
-  '0xHeir2': {
-    owner: mockOwnerData['0xowner2'],
-    hasVotingRight: true
-  }
-};
+interface VaultFile {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  cid: string;
+  uploadDate: string;
+}
 
-export default function HeirsPortal() {
-  const { address, isConnected } = useAccount();
-  const [isLoading, setIsLoading] = useState(true);
-  const [ownerInfo, setOwnerInfo] = useState<Owner | null>(null);
-  const [hasVotingRight, setHasVotingRight] = useState(false);
-  const [isVoting, setIsVoting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const router = useRouter();
+interface DeathDeclarationStatus {
+  isActive: boolean;
+  isDeceased: boolean;
+  votesFor: number;
+  votesAgainst: number;
+  totalVotingContacts: number;
+  consensusReached: boolean;
+  isInGracePeriod: boolean;
+  gracePeriodEnd: number;
+}
 
-  // Get contact vault details from blockchain
-  const { data: contactVaultDetails, error: vaultDetailsError, isLoading: vaultDetailsLoading } = useReadContract({
+interface Contact {
+  address: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  hasVotingRight: boolean;
+  isVerified: boolean;
+  exists: boolean;
+}
+
+
+
+const OwnerRow: React.FC<{ 
+  owner: Owner; 
+  userAddress: string; 
+  onRefresh: () => void;
+}> = ({ owner, userAddress, onRefresh }) => {
+  const [deathStatus, setDeathStatus] = useState<DeathDeclarationStatus | null>(null);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [userContact, setUserContact] = useState<Contact | null>(null);
+  const [hasVoted, setHasVoted] = useState<boolean>(false);
+  const [userVote, setUserVote] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState<string>('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
+  const [showVaults, setShowVaults] = useState(false);
+  const [vaultFiles, setVaultFiles] = useState<VaultFile[]>([]);
+  const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
+
+  const { writeContract, isPending, error } = useWriteContract();
+
+  // Read contract data
+  const { data: deathStatusData, refetch: refetchDeathStatus } = useReadContract({
     address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
-    abi: LIFESIGNAL_REGISTRY_ABI,
-    functionName: 'getContactVaultDetails',
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address && isConnected,
-      refetchInterval: 5000, // Refetch every 5 seconds
-    }
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getDeathDeclarationStatus',
+    args: [owner.address as `0x${string}`],
+  });
+
+  const { data: contactsData, refetch: refetchContacts } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getContactListDetails',
+    args: [owner.address as `0x${string}`],
+  });
+
+  const { data: hasVotedData, refetch: refetchHasVoted } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'hasVoted',
+    args: [owner.address as `0x${string}`, userAddress as `0x${string}`],
+  });
+
+  const { data: userVoteData, refetch: refetchUserVote } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getVote',
+    args: [owner.address as `0x${string}`, userAddress as `0x${string}`],
+    query: { enabled: hasVoted }
+  });
+
+  const { data: graceExpiryData, refetch: refetchGraceExpiry } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'checkGracePeriodExpiry',
+    args: [owner.address as `0x${string}`],
+  });
+
+  // Fetch vault data when owner is deceased
+  const { data: vaultData, refetch: refetchVaultData } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getOwnerVaultListDetails',
+    args: [owner.address as `0x${string}`],
+    query: { enabled: deathStatus?.isDeceased || false }
   });
 
   useEffect(() => {
-    if (!isConnected) {
-      router.push('/');
-      return;
+    if (deathStatusData) {
+      const [isActive, isDeceased, votesFor, votesAgainst, totalVotingContacts, consensusReached, isInGracePeriod, gracePeriodEnd] = deathStatusData as unknown as any[];
+      setDeathStatus({
+        isActive,
+        isDeceased,
+        votesFor: Number(votesFor),
+        votesAgainst: Number(votesAgainst),
+        totalVotingContacts: Number(totalVotingContacts),
+        consensusReached,
+        isInGracePeriod,
+        gracePeriodEnd: Number(gracePeriodEnd)
+      });
     }
+  }, [deathStatusData]);
 
-    const fetchHeirInfo = async () => {
-      if (!address) return;
+  useEffect(() => {
+    if (contactsData) {
+      const [addresses, firstNames, lastNames, emails, phones, hasVotingRights, isVerified] = contactsData as unknown as any[];
+      const contactList = addresses.map((addr: string, index: number) => ({
+        address: addr,
+        firstName: firstNames[index],
+        lastName: lastNames[index],
+        email: emails[index],
+        phone: phones[index],
+        hasVotingRight: hasVotingRights[index],
+        isVerified: isVerified[index],
+        exists: true
+      }));
+      setContacts(contactList);
+      
+      // Find user's contact info
+      const userContactInfo = contactList.find((c: Contact) => c.address.toLowerCase() === userAddress.toLowerCase());
+      setUserContact(userContactInfo || null);
+    }
+  }, [contactsData, userAddress]);
 
+  useEffect(() => {
+    if (hasVotedData !== undefined) {
+      setHasVoted(hasVotedData as boolean);
+    }
+  }, [hasVotedData]);
+
+  useEffect(() => {
+    if (userVoteData !== undefined) {
+      setUserVote(userVoteData as boolean);
+    }
+  }, [userVoteData]);
+
+  // Process vault data when owner is deceased
+  useEffect(() => {
+    if (vaultData && deathStatus?.isDeceased) {
+      const [vaultIds, names, owners, isReleased, cypherIvs, encryptionKeys, fileIds] = vaultData as unknown as any[];
+      
+      if (vaultIds && Array.isArray(vaultIds)) {
+        const allFiles: VaultFile[] = [];
+        
+        vaultIds.forEach((vaultId: string, vaultIndex: number) => {
+          const vaultName = names?.[vaultIndex] || `Vault ${vaultIndex + 1}`;
+          const files = fileIds?.[vaultIndex] || [];
+          
+          // Use real file IDs from blockchain
+          files.forEach((fileId: string, fileIndex: number) => {
+            allFiles.push({
+              id: `${vaultId}_${fileId}`,
+              originalName: `File ${fileIndex + 1} from ${vaultName}`, // Will be replaced with real name from blockchain
+              mimeType: 'application/octet-stream', // Will be replaced with real mime type from blockchain
+              cid: `placeholder_${fileId}`, // Will be replaced with real CID from blockchain
+              uploadDate: new Date().toISOString() // Will be replaced with real upload date from blockchain
+            });
+          });
+        });
+        
+        setVaultFiles(allFiles);
+      }
+    }
+  }, [vaultData, deathStatus?.isDeceased]);
+
+    const refreshAll = async () => {
       setIsLoading(true);
-      try {
-        // Check if user has access to any vaults from real contract data
-        if (contactVaultDetails && Array.isArray(contactVaultDetails) && contactVaultDetails.length >= 7) {
-          const vaultIds = contactVaultDetails[0] as readonly bigint[];
-          if (vaultIds && vaultIds.length > 0) {
-            // User has access to vaults - this is a real heir
-            setOwnerInfo({
-              id: 'real-heir',
-              firstName: 'Vault',
-              lastName: 'Contact',
-              address: address,
-              status: 'active',
-              graceInterval: 30,
-              isIdVerified: true,
-              hasVotingRight: true,
-              deathDeclaration: null,
-            });
-            setHasVotingRight(true);
-            setError(null);
-          } else {
-            // No vaults found but user is still a contact
-            setOwnerInfo({
-              id: 'contact-no-vaults',
-              firstName: 'Contact',
-              lastName: 'User',
-              address: address,
-              status: 'active',
-              graceInterval: 30,
-              isIdVerified: true,
-              hasVotingRight: false,
-              deathDeclaration: null,
-            });
-            setHasVotingRight(false);
-            setError(null);
-          }
-        } else if (vaultDetailsError) {
-          // Contract error - user might not be a contact at all
-          throw new Error(`Contract error: ${vaultDetailsError.message}`);
-        } else if (!vaultDetailsLoading && !contactVaultDetails) {
-          // No data returned - user is not a contact
-          throw new Error('No vault access found - you are not authorized as a contact for any vaults');
-        } else {
-          // Still loading or no data yet
-          return;
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-        setOwnerInfo(null);
+    setMessage('');
+    setMessageType('');
+    
+    try {
+      await Promise.all([
+        refetchDeathStatus(),
+        refetchContacts(),
+        refetchHasVoted(),
+        refetchUserVote(),
+        refetchGraceExpiry(),
+        refetchVaultData()
+      ]);
+      onRefresh();
+    } catch (error) {
+      console.error('Error refreshing:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchHeirInfo();
-  }, [address, isConnected, router, contactVaultDetails, vaultDetailsError, vaultDetailsLoading]);
-
-  const handleDeclareDeceased = async () => {
-    if (!ownerInfo || !address) return;
-
-    setIsVoting(true);
+  // Web Crypto API decryption function to match the encryption method used in vaults
+  const decryptFileWebCrypto = async (
+    encryptedArrayBuffer: ArrayBuffer,
+    encryptionKey: string,
+    mimeType: string
+  ): Promise<Blob> => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Update owner status
-      setOwnerInfo(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          status: 'voting_in_progress',
-          deathDeclaration: {
-            declaredBy: address,
-            declaredAt: new Date().toISOString(),
-            votes: [
-              { contactId: address, voted: true, votedAt: new Date().toISOString() }
-            ],
-            consensusReached: false
-          }
-        };
-      });
-    } catch (err) {
-      setError('Failed to declare death. Please try again.');
-    } finally {
-      setIsVoting(false);
-      setShowConfirmation(false);
+      let keyBuffer: Uint8Array;
+      
+      // Try to detect if the key is base64 or a random string
+      try {
+        // First try to decode as base64
+        keyBuffer = Uint8Array.from(atob(encryptionKey), c => c.charCodeAt(0));
+      } catch (e) {
+        // If base64 decoding fails, treat as a random string and convert to bytes
+        console.log('Key is not base64, treating as random string');
+        const encoder = new TextEncoder();
+        const keyBytes = encoder.encode(encryptionKey);
+        // Pad or truncate to 32 bytes for AES-256
+        keyBuffer = new Uint8Array(32);
+        keyBuffer.set(keyBytes.slice(0, 32));
+      }
+      
+      // Import the key
+      const key = await crypto.subtle.importKey(
+        'raw',
+        keyBuffer,
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
+      );
+      
+      const encryptedArray = new Uint8Array(encryptedArrayBuffer);
+      
+      // Extract IV from the beginning (first 12 bytes for AES-GCM)
+      const iv = encryptedArray.slice(0, 12);
+      const ciphertext = encryptedArray.slice(12);
+      
+      // Decrypt the data
+      const decryptedData = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: iv,
+        },
+        key,
+        ciphertext
+      );
+      
+      return new Blob([decryptedData], { type: mimeType });
+    } catch (error) {
+      throw new Error(`Web Crypto decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Base layout that's always shown
-  const BaseLayout = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
+  const handleDownloadFile = async (file: VaultFile) => {
+    const fileKey = file.id;
+    setDownloadingFiles(prev => new Set([...prev, fileKey]));
+    
+    try {
+      console.log('=== HEIR DOWNLOADING FILE ===');
+      console.log('File ID:', file.id);
+      console.log('File Name:', file.originalName);
+      console.log('CID:', file.cid);
 
-      {/* Wallet Button - Top Right */}
-      <div className="absolute top-4 right-4 z-20">
-        <WalletConnectButton size="md" />
-      </div>
+      // Extract vault ID and file ID from the combined ID
+      const [vaultId, fileId] = file.id.split('_');
+      
+      if (!vaultId || !fileId) {
+        throw new Error('Invalid file ID format');
+      }
 
-      {/* Main content */}
-      <div className="relative z-10 container mx-auto px-4 py-16">
-        {children}
-      </div>
-    </div>
-  );
+      // Get vault info from smart contract to get encryption key and IV
+      const { readContract } = await import('wagmi/actions');
+      const { config } = await import('../../lib/wagmi');
+      
+      const vaultInfo = await readContract(config, {
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
+        functionName: 'getVaultInfo',
+        args: [BigInt(vaultId)],
+      });
+      
+      if (!vaultInfo) {
+        throw new Error('Could not retrieve vault information');
+      }
 
-  if (!isConnected) {
-    return (
-      <BaseLayout>
-        <div className="max-w-md w-full mx-auto backdrop-blur-xl bg-white/10 p-8 rounded-2xl border border-white/20 text-center">
-          <h2 className="text-2xl font-bold text-white mb-4">Connect Your Wallet</h2>
-          <p className="text-white/70 mb-6">
-            Please connect your wallet to access the heirs portal.
-          </p>
-        </div>
-      </BaseLayout>
-    );
-  }
+      console.log('Vault info retrieved:', vaultInfo);
 
-  if (isLoading) {
-    return (
-      <BaseLayout>
-        <div className="flex items-center justify-center">
-          <div className="text-white text-xl">Loading heir information...</div>
-        </div>
-      </BaseLayout>
-    );
-  }
+      // Get file info from smart contract to get actual file details
+      const fileInfo = await readContract(config, {
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
+        functionName: 'getVaultFileInfo',
+        args: [BigInt(vaultId), BigInt(fileId)],
+      });
 
-  if (error) {
-    return (
-      <BaseLayout>
-        <div className="max-w-md w-full mx-auto backdrop-blur-xl bg-white/10 p-8 rounded-2xl border border-white/20">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">⚠️</span>
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
-            <p className="text-white/70 mb-6">{error}</p>
+      if (!fileInfo) {
+        throw new Error('Could not retrieve file information');
+      }
+
+      console.log('File info retrieved:', fileInfo);
+
+      // Extract file data
+      const originalName = fileInfo[0] as string;
+      const mimeType = fileInfo[1] as string;
+      const cid = fileInfo[2] as string;
+      const uploadDate = fileInfo[3] as string;
+      const exists = fileInfo[4] as boolean;
+      
+      if (!exists) {
+        throw new Error('File does not exist');
+      }
+
+      // Extract vault encryption data
+      const cypherIv = vaultInfo[4] as string;
+      const encryptionKey = vaultInfo[5] as string;
+
+      console.log('Downloading from Walrus with CID:', cid);
+
+      // Retrieve encrypted file from Walrus using direct HTTP API
+      const res = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${cid}`);
+      if (!res.ok) throw new Error("Download failed: " + res.statusText);
+      const blob = await res.blob();
+      const encryptedArrayBuffer = await blob.arrayBuffer();
+      
+      console.log('File retrieved from Walrus, size:', encryptedArrayBuffer.byteLength);
+
+      // Decrypt the file using Web Crypto API (matching the encryption method)
+      const decryptedBlob = await decryptFileWebCrypto(
+        encryptedArrayBuffer,
+        encryptionKey,
+        mimeType
+      );
+
+      console.log('File decrypted successfully');
+
+      // Download the decrypted file
+      const url = URL.createObjectURL(decryptedBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = originalName || file.originalName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      console.log('File downloaded successfully');
+      console.log('=== HEIR DOWNLOAD COMPLETE ===');
+      
+      setMessage(`Successfully downloaded: ${originalName || file.originalName}`);
+      setMessageType('success');
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setMessage(`Failed to download file: ${errorMessage}`);
+      setMessageType('error');
+    } finally {
+      setDownloadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileKey);
+        return newSet;
+      });
+    }
+  };
+
+  const handleDeclareDeceased = async () => {
+    if (!userContact?.hasVotingRight) {
+      setMessage('You do not have voting rights for this owner');
+      setMessageType('error');
+      return;
+    }
+
+    try {
+      setMessage('');
+      setMessageType('');
+
+      await writeContract({
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
+        functionName: 'declareDeceased',
+        args: [owner.address as `0x${string}`],
+      });
+
+      setMessage('Death declaration initiated successfully');
+      setMessageType('success');
+      setTimeout(refreshAll, 2000);
+    } catch (error: any) {
+      console.error('Error declaring deceased:', error);
+      let errorMessage = 'Failed to declare deceased';
+      if (error.message?.includes('Owner already deceased')) {
+        errorMessage = 'Owner is already deceased';
+      } else if (error.message?.includes('Death declaration already active')) {
+        errorMessage = 'Death declaration is already active';
+      }
+      setMessage(errorMessage);
+      setMessageType('error');
+    }
+  };
+
+  const handleVote = async (vote: boolean) => {
+    if (!userContact?.hasVotingRight) {
+      setMessage('You do not have voting rights for this owner');
+      setMessageType('error');
+      return;
+    }
+
+    try {
+      setMessage('');
+      setMessageType('');
+
+      await writeContract({
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
+        functionName: 'voteOnDeathDeclaration',
+        args: [owner.address as `0x${string}`, vote],
+      });
+
+      setMessage(`Vote submitted successfully: ${vote ? 'Yes' : 'No'}`);
+      setMessageType('success');
+      setTimeout(refreshAll, 2000);
+    } catch (error: any) {
+      console.error('Error voting:', error);
+      let errorMessage = 'Failed to submit vote';
+      if (error.message?.includes('Already voted')) {
+        errorMessage = 'You have already voted';
+      } else if (error.message?.includes('No active death declaration')) {
+        errorMessage = 'No active death declaration to vote on';
+      }
+      setMessage(errorMessage);
+      setMessageType('error');
+    }
+  };
+
+  const handleFinalizeDeclaration = async () => {
+    try {
+      setMessage('');
+      setMessageType('');
+
+      await writeContract({
+        address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+        abi: LIFE_SIGNAL_REGISTRY_ABI,
+        functionName: 'finalizeDeathDeclaration',
+        args: [owner.address as `0x${string}`],
+      });
+
+      setMessage('Death declaration finalized successfully');
+      setMessageType('success');
+      setTimeout(refreshAll, 2000);
+    } catch (error: any) {
+      console.error('Error finalizing declaration:', error);
+      setMessage('Failed to finalize death declaration');
+      setMessageType('error');
+    }
+  };
+
+  const getStatusDisplay = () => {
+    if (owner.isDeceased) return 'Death Confirmed';
+    if (deathStatus?.isInGracePeriod) return 'Grace Period';
+    if (deathStatus?.isActive) return 'Voting';
+    return 'Active';
+  };
+
+  const getStatusColor = () => {
+    if (owner.isDeceased) return 'bg-black text-white';
+    if (deathStatus?.isInGracePeriod) return 'bg-orange-500 text-white';
+    if (deathStatus?.isActive) return 'bg-yellow-500 text-white';
+    return 'bg-green-500 text-white';
+  };
+
+  const getActionButton = () => {
+    if (owner.isDeceased) {
+      return (
+        <span className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded">
+          Death Confirmed
+        </span>
+      );
+    }
+
+    if (deathStatus?.isInGracePeriod) {
+      const now = Math.floor(Date.now() / 1000);
+      const expired = graceExpiryData?.[0];
+      const canFinalize = graceExpiryData?.[1];
+
+      if (canFinalize) {
+        return (
+          <button
+            onClick={handleFinalizeDeclaration}
+            disabled={isPending}
+            className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50"
+          >
+            {isPending ? 'Finalizing...' : 'Finalize Death'}
+          </button>
+        );
+      }
+
+      return (
+        <span className="px-3 py-1 text-sm bg-orange-100 text-orange-700 rounded">
+          Grace Period Active
+        </span>
+      );
+    }
+
+    if (deathStatus?.isActive) {
+      if (hasVoted) {
+        return (
+          <span className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded">
+            Voted: {userVote ? 'Yes' : 'No'}
+          </span>
+        );
+      }
+
+      if (userContact?.hasVotingRight) {
+        return (
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleVote(true)}
+              disabled={isPending}
+              className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50"
+            >
+              Vote Yes
+            </button>
+            <button
+              onClick={() => handleVote(false)}
+              disabled={isPending}
+              className="px-3 py-1 text-sm bg-green-500 hover:bg-green-600 text-white rounded disabled:opacity-50"
+            >
+              Vote No
+            </button>
           </div>
-        </div>
-      </BaseLayout>
-    );
-  }
+        );
+      }
 
-  if (!ownerInfo) return null;
+      return (
+        <span className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded">
+          No Voting Rights
+        </span>
+      );
+    }
+
+    if (userContact?.hasVotingRight) {
+      return (
+        <button
+          onClick={handleDeclareDeceased}
+          disabled={isPending}
+          className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50"
+        >
+          {isPending ? 'Declaring...' : 'Declare Deceased'}
+        </button>
+      );
+    }
+
+    return (
+      <span className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded">
+        No Voting Rights
+      </span>
+    );
+  };
 
   return (
-    <BaseLayout>
-      <div className="max-w-xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent mb-4">
-            Heirs Portal
-          </h1>
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+      {/* Grace Period Alert - Only show status to heirs, not the countdown */}
+      {deathStatus?.isInGracePeriod && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+            <h3 className="text-lg font-semibold text-orange-800">Grace Period Active</h3>
+          </div>
+          <p className="text-orange-700">
+            All contacts have voted to declare this owner deceased. The owner has 30 seconds 
+            to prove they are alive by sending a heartbeat.
+          </p>
         </div>
+      )}
 
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-semibold text-gray-900">
+            {owner.firstName} {owner.lastName}
+          </h3>
+          <p className="text-sm text-gray-500">{owner.address}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={`px-2 py-1 text-xs rounded whitespace-nowrap ${getStatusColor()}`}>
+            {getStatusDisplay()}
+          </span>
+          <button
+            onClick={refreshAll}
+            disabled={isLoading}
+            className="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded disabled:opacity-50"
+          >
+            {isLoading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+      </div>
 
+      {deathStatus?.isActive && (
+        <div className="mb-4 p-3 bg-yellow-50 rounded-lg">
+          <p className="text-sm text-yellow-800">
+            <strong>Voting Status:</strong> {deathStatus.votesFor}/{deathStatus.totalVotingContacts} votes for death
+          </p>
+        </div>
+      )}
 
-        {/* Owners Table - Where user is a contact */}
-        <div className="mt-8 backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 p-8">
-          <h3 className="text-xl font-semibold text-white mb-6">Owners Where You Are a Contact</h3>
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-600">
+          Last heartbeat: {new Date(owner.lastHeartbeat * 1000).toLocaleString()}
+        </div>
+        <div className="flex items-center gap-2">
+          {getActionButton()}
+          {/* Add vault access button for deceased owners */}
+          {deathStatus?.isDeceased && (
+            <button
+              onClick={() => setShowVaults(!showVaults)}
+              className="px-3 py-1 text-sm bg-green-500 hover:bg-green-600 text-white rounded"
+            >
+              {showVaults ? 'Hide Vaults' : `Access Vaults (${vaultFiles.length} files)`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Vault Access Section for Deceased Owners */}
+      {deathStatus?.isDeceased && showVaults && (
+        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h4 className="text-lg font-semibold text-green-800 mb-3">
+            🔓 Inherited Vault Access - {vaultFiles.length} Files Available
+          </h4>
           
-          {vaultDetailsLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-              <p className="text-white/70 mt-2">Loading owner information...</p>
-            </div>
-          ) : vaultDetailsError ? (
-            <div className="text-center py-8">
-              <p className="text-red-400">Error loading owner information: {vaultDetailsError.message}</p>
-            </div>
+          {vaultFiles.length === 0 ? (
+            <p className="text-green-700">No files found in this owner's vaults.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs uppercase bg-white/5">
-                  <tr>
-                    <th className="px-6 py-3 text-white/70">Owner Address</th>
-                    <th className="px-6 py-3 text-white/70">Status</th>
-                    <th className="px-6 py-3 text-white/70">Voting Rights</th>
-                    <th className="px-6 py-3 text-white/70">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {(() => {
-                    // Check if we have valid vault data to extract owner information
-                    if (!contactVaultDetails || !Array.isArray(contactVaultDetails) || contactVaultDetails.length < 7) {
-                      return (
-                        <tr>
-                          <td colSpan={4} className="px-6 py-8 text-center text-white/70">
-                            <div className="flex flex-col items-center space-y-2">
-                              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
-                                <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                                </svg>
-                              </div>
-                              <p className="text-white/70 font-medium">No Owner Access</p>
-                              <p className="text-white/50 text-sm">You are not a contact for any owners</p>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    const vaultOwners = contactVaultDetails[2] as readonly `0x${string}`[];
-                    
-                    if (!vaultOwners || vaultOwners.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan={4} className="px-6 py-8 text-center text-white/70">
-                            <div className="flex flex-col items-center space-y-2">
-                              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
-                                <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                                </svg>
-                              </div>
-                              <p className="text-white/70 font-medium">No Owners Found</p>
-                              <p className="text-white/50 text-sm">No owner information available</p>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    // Get unique owners
-                    const uniqueOwners = [...new Set(vaultOwners)];
-                    
-                    return uniqueOwners.map((ownerAddress, index) => (
-                      <tr key={ownerAddress} className="hover:bg-white/5">
-                        <td className="px-6 py-4 text-white/70 font-mono text-sm">
-                          {ownerAddress.slice(0, 6)}...{ownerAddress.slice(-4)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400">
-                            Active
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400">
-                            Yes
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <button
-                            onClick={() => {
-                              // For now, we'll use a simple alert. In a real implementation,
-                              // you'd want to fetch owner details and show a proper modal
-                              alert(`Death declaration for ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
-                            }}
-                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors"
-                          >
-                            Declare Death
-                          </button>
-                        </td>
-                      </tr>
-                    ));
-                  })()}
-                </tbody>
-              </table>
+            <div className="space-y-2">
+              {vaultFiles.map((file) => (
+                <div key={file.id} className="flex items-center justify-between bg-white p-3 rounded border border-green-200">
+                  <div className="flex-1">
+                    <div className="font-medium text-green-800">{file.originalName}</div>
+                    <div className="text-xs text-green-600">
+                      CID: {file.cid} • Uploaded: {new Date(file.uploadDate).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDownloadFile(file)}
+                    disabled={downloadingFiles.has(file.id)}
+                    className="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {downloadingFiles.has(file.id) ? (
+                      <div className="flex items-center gap-1">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                        <span>Downloading...</span>
+                      </div>
+                    ) : (
+                      '📥 Download'
+                    )}
+                  </button>
+                </div>
+              ))}
+              
+              <div className="mt-3 p-2 bg-green-100 rounded text-xs text-green-700">
+                <strong>Note:</strong> As an heir, you now have access to all files from this deceased owner's vaults. 
+                These files were encrypted and are now available for inheritance.
+              </div>
             </div>
           )}
         </div>
+      )}
 
-        {/* Vault Access Table */}
-        <div className="mt-8 backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-white">Vault Access</h3>
-            {contactVaultDetails && Array.isArray(contactVaultDetails) && contactVaultDetails.length >= 7 && (
-              <div className="text-sm text-white/70">
-                {(() => {
-                  const vaultIds = contactVaultDetails[0] as readonly bigint[];
-                  return `${vaultIds?.length || 0} vault${vaultIds?.length !== 1 ? 's' : ''}`;
-                })()}
-              </div>
-            )}
-          </div>
-          
-          {vaultDetailsLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-              <p className="text-white/70 mt-2">Loading vault details from blockchain...</p>
-            </div>
-          ) : vaultDetailsError ? (
-            <div className="text-center py-8">
-              <p className="text-red-400">Error loading vault details: {vaultDetailsError.message}</p>
-              <details className="mt-4 text-left">
-                <summary className="text-white/50 cursor-pointer text-xs">Debug Info</summary>
-                <pre className="mt-2 text-xs text-white/50 bg-black/20 p-2 rounded overflow-auto">
-                  {JSON.stringify({ 
-                    error: vaultDetailsError?.message || vaultDetailsError, 
-                    address, 
-                    isConnected,
-                    contractAddress: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY
-                  }, null, 2)}
-                </pre>
-              </details>
-            </div>
-          ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs uppercase bg-white/5">
-                    <tr>
-                      <th className="px-6 py-3 text-white/70">Vault Name</th>
-                      <th className="px-6 py-3 text-white/70">Owner</th>
-                      <th className="px-6 py-3 text-white/70">Status</th>
-                      <th className="px-6 py-3 text-white/70">Files</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {(() => {
-                      // Check if we have valid vault data
-                      if (!contactVaultDetails || !Array.isArray(contactVaultDetails) || contactVaultDetails.length < 7) {
-                        return (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-8 text-center text-white/70">
-                              <div className="flex flex-col items-center space-y-2">
-                                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
-                                  <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                                  </svg>
-                                </div>
-                                <p className="text-white/70 font-medium">No Vault Access</p>
-                                <p className="text-white/50 text-sm">You are not authorized as a contact for any vaults</p>
-                                <details className="mt-4 text-left">
-                                  <summary className="text-white/50 cursor-pointer text-xs">Debug Info</summary>
-                                  <pre className="mt-2 text-xs text-white/50 bg-black/20 p-2 rounded overflow-auto max-w-xs">
-                                    {(() => {
-                                      if (!contactVaultDetails) return 'No data';
-                                      if (!Array.isArray(contactVaultDetails)) return 'Not an array';
-                                      return `Array with ${contactVaultDetails.length} items`;
-                                    })()}
-                                  </pre>
-                                </details>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      const vaultIds = contactVaultDetails[0] as readonly bigint[];
-                      const vaultNames = contactVaultDetails[1] as readonly string[];
-                      const vaultOwners = contactVaultDetails[2] as readonly `0x${string}`[];
-                      const isReleased = contactVaultDetails[3] as readonly boolean[];
-                      const fileIds = contactVaultDetails[6] as readonly (readonly bigint[])[];
-
-                      if (!vaultIds || vaultIds.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-8 text-center text-white/70">
-                              <div className="flex flex-col items-center space-y-2">
-                                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
-                                  <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                                  </svg>
-                                </div>
-                                <p className="text-white/70 font-medium">No Vaults Found</p>
-                                <p className="text-white/50 text-sm">You may not have been authorized for any vaults yet</p>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return vaultIds.map((vaultId, index) => (
-                        <tr key={Number(vaultId)} className="hover:bg-white/5">
-                          <td className="px-6 py-4 text-white">
-                            {vaultNames[index] || `Vault ${Number(vaultId)}`}
-                          </td>
-                          <td className="px-6 py-4 text-white/70 font-mono text-xs">
-                            {vaultOwners[index] ? `${vaultOwners[index].slice(0, 6)}...${vaultOwners[index].slice(-4)}` : 'Unknown'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              isReleased[index] 
-                                ? 'bg-green-500/20 text-green-400' 
-                                : 'bg-yellow-500/20 text-yellow-400'
-                            }`}>
-                              {isReleased[index] ? 'Released' : 'Locked'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-white">
-                            {fileIds[index] ? fileIds[index].length : 0} files
-                          </td>
-                        </tr>
-                      ));
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-      </div>
-
-      {/* Confirmation Modal */}
-      {showConfirmation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-md bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 border border-white/20 rounded-2xl p-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">⚠️</span>
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">Confirm Death Declaration</h3>
-              <p className="text-white/70 mb-6">
-                Are you sure you want to declare {ownerInfo?.firstName} {ownerInfo?.lastName} as deceased? This action will initiate a voting process among all trusted contacts.
-              </p>
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowConfirmation(false)}
-                  className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeclareDeceased}
-                  disabled={isVoting}
-                  className={`flex-1 px-4 py-2 rounded-xl border transition-colors ${
-                    isVoting
-                      ? 'bg-red-500/50 text-white/50 cursor-not-allowed border-red-500/20'
-                      : 'bg-red-500 hover:bg-red-600 text-white border-red-500/20'
-                  }`}
-                >
-                  {isVoting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Processing...
-                    </span>
-                  ) : (
-                    'Confirm Declaration'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+      {message && (
+        <div className={`mt-3 p-2 rounded text-sm ${
+          messageType === 'success' 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {message}
         </div>
       )}
-    </BaseLayout>
+
+      {error && (
+        <div className="mt-3 p-2 bg-red-100 text-red-800 rounded text-sm">
+          Error: {error.message}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function HeirsPortal() {
+  const { address } = useAccount();
+  const [owners, setOwners] = useState<Owner[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+
+  // Fetch vault details for the current user as a contact
+  const { data: vaultDetailsData, refetch: refetchOwners } = useReadContract({
+    address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
+    abi: LIFE_SIGNAL_REGISTRY_ABI,
+    functionName: 'getContactVaultDetails',
+    args: [address as `0x${string}`],
+    query: { enabled: !!address }
+  });
+
+  useEffect(() => {
+    const loadOwners = async () => {
+      if (!address) {
+        setOwners([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError('');
+
+        if (vaultDetailsData) {
+          const [vaultIds, vaultNames, vaultOwners, isReleased, cypherIvs, encryptionKeys, fileIds] = vaultDetailsData as unknown as any[];
+          
+          if (vaultOwners && Array.isArray(vaultOwners)) {
+            // Get unique owners from vault owners
+            const uniqueOwners = [...new Set(vaultOwners)];
+            
+            const realOwners: Owner[] = uniqueOwners.map((ownerAddr: string, index: number) => {
+              // Find all vaults for this owner
+              const ownerVaults = vaultOwners.map((vaultOwner: string, vaultIndex: number) => 
+                vaultOwner === ownerAddr ? vaultIndex : -1
+              ).filter((index: number) => index !== -1);
+              
+              // Get owner info from the first vault (they should all have the same owner info)
+              const firstVaultIndex = ownerVaults[0];
+              
+              return {
+                address: ownerAddr,
+                firstName: `Owner ${index + 1}`, // We'll need to fetch this from getOwnerInfo
+                lastName: '', // We'll need to fetch this from getOwnerInfo
+                lastHeartbeat: Math.floor(Date.now() / 1000) - 3600, // Default to 1 hour ago
+                graceInterval: 86400, // Default to 24 hours
+                isDeceased: false, // We'll need to check this from getDeathDeclarationStatus
+                exists: true,
+                status: 'active' as const,
+                hasVotingRight: true, // Will be checked per owner
+                isIdVerified: true,
+                deathDeclaration: null,
+                id: index.toString()
+              };
+            });
+
+            setOwners(realOwners);
+          } else {
+            setOwners([]);
+          }
+        } else {
+          setOwners([]);
+        }
+      } catch (error) {
+        console.error('Error loading owners:', error);
+        setError('Failed to load owners. Please try again.');
+        setOwners([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadOwners();
+  }, [address, vaultDetailsData]);
+
+  const handleRefresh = () => {
+    setLoading(true);
+    refetchOwners();
+  };
+
+  if (!address) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Heirs Portal</h1>
+          <p className="text-gray-600">Please connect your wallet to access the heirs portal.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading owners...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Heirs Portal</h1>
+          <p className="text-gray-600">
+            Monitor and manage death declarations for owners you are authorized to vote for.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 border border-red-200 rounded-lg">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
+
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Owners</h2>
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg disabled:opacity-50"
+            >
+              {loading ? 'Loading...' : 'Refresh All'}
+            </button>
+          </div>
+
+          {owners.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+              <p className="text-gray-500">No owners found that you have access to.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {owners.map((owner) => (
+                <OwnerRow
+                  key={owner.address}
+                  owner={owner}
+                  userAddress={address}
+                  onRefresh={handleRefresh}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 } 
