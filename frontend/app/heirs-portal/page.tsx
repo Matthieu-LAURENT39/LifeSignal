@@ -6,6 +6,7 @@ import { useAccount, useReadContract, useWriteContract } from 'wagmi';
 import type { Owner as BaseOwner } from '../../types/models';
 import { useRouter } from 'next/navigation';
 import { CONTRACT_ADDRESSES, LIFE_SIGNAL_REGISTRY_ABI } from '../../lib/contracts';
+import Link from 'next/link';
 
 interface Owner extends BaseOwner {
   lastHeartbeat: number;
@@ -42,8 +43,6 @@ interface Contact {
   isVerified: boolean;
   exists: boolean;
 }
-
-
 
 const OwnerRow: React.FC<{ 
   owner: Owner; 
@@ -466,219 +465,321 @@ const OwnerRow: React.FC<{
   };
 
   const getStatusDisplay = () => {
-    if (deathStatus?.isDeceased) return 'Deceased';
+    if (owner.isDeceased) return 'Death Confirmed';
     if (deathStatus?.isInGracePeriod) return 'Grace Period';
     if (deathStatus?.isActive) return 'Voting';
     return 'Active';
   };
 
   const getStatusColor = () => {
-    if (deathStatus?.isDeceased) return 'bg-red-500/20 text-red-400 border-red-400/50';
-    if (deathStatus?.isInGracePeriod) return 'bg-yellow-500/20 text-yellow-400 border-yellow-400/50';
-    if (deathStatus?.isActive) return 'bg-purple-500/20 text-purple-400 border-purple-400/50';
-    return 'bg-green-500/20 text-green-400 border-green-400/50';
+    if (owner.isDeceased) return 'bg-black text-white';
+    if (deathStatus?.isInGracePeriod) return 'bg-orange-500 text-white';
+    if (deathStatus?.isActive) return 'bg-yellow-500 text-white';
+    return 'bg-green-500 text-white';
   };
 
   const getActionButton = () => {
-    if (deathStatus?.isDeceased) {
+    if (owner.isDeceased) {
       return (
-        <button
-          onClick={() => setShowVaults(!showVaults)}
-          className="px-4 py-2 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500/90 hover:to-pink-500/90 text-white font-medium rounded-xl transition-all duration-300"
-        >
-          {showVaults ? 'Hide Vaults' : 'View Vaults'}
-        </button>
+        <span className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded">
+          Death Confirmed
+        </span>
       );
     }
 
     if (deathStatus?.isInGracePeriod) {
-      return (
-        <button
-          disabled
-          className="px-4 py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-400/50 rounded-xl cursor-not-allowed"
-        >
+      const now = Math.floor(Date.now() / 1000);
+      const expired = graceExpiryData?.[0];
+      const canFinalize = graceExpiryData?.[1];
+
+      if (canFinalize) {
+        return (
+          <button
+            onClick={handleFinalizeDeclaration}
+            disabled={isPending}
+            className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50"
+          >
+            {isPending ? 'Finalizing...' : 'Finalize Death'}
+          </button>
+        );
+      }
+
+    return (
+        <span className="px-3 py-1 text-sm bg-orange-100 text-orange-700 rounded">
           Grace Period Active
-        </button>
+        </span>
       );
     }
 
     if (deathStatus?.isActive) {
-      if (!hasVoted) {
-        return (
+      if (hasVoted) {
+    return (
+          <span className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded">
+            Voted: {userVote ? 'Yes' : 'No'}
+          </span>
+        );
+      }
+
+      if (userContact?.hasVotingRight) {
+    return (
           <div className="flex gap-2">
             <button
               onClick={() => handleVote(true)}
-              disabled={isLoading || !userContact?.hasVotingRight}
-              className="px-4 py-2 bg-gradient-to-r from-red-600/80 to-orange-600/80 hover:from-red-500/90 hover:to-orange-500/90 text-white font-medium rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isPending}
+              className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50"
             >
               Vote Yes
             </button>
             <button
               onClick={() => handleVote(false)}
-              disabled={isLoading || !userContact?.hasVotingRight}
-              className="px-4 py-2 bg-gradient-to-r from-green-600/80 to-emerald-600/80 hover:from-green-500/90 hover:to-emerald-500/90 text-white font-medium rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isPending}
+              className="px-3 py-1 text-sm bg-green-500 hover:bg-green-600 text-white rounded disabled:opacity-50"
             >
               Vote No
             </button>
           </div>
         );
       }
+
       return (
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-white/70">
-            Voted: {userVote ? 'Yes' : 'No'}
-          </span>
-          {deathStatus.consensusReached && (
-            <button
-              onClick={handleFinalizeDeclaration}
-              className="px-4 py-2 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500/90 hover:to-pink-500/90 text-white font-medium rounded-xl transition-all duration-300"
-            >
-              Finalize
-            </button>
-          )}
-        </div>
+        <span className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded">
+          No Voting Rights
+        </span>
+      );
+    }
+
+    if (userContact?.hasVotingRight) {
+      return (
+        <button
+          onClick={handleDeclareDeceased}
+          disabled={isPending}
+          className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50"
+        >
+          {isPending ? 'Declaring...' : 'Declare Deceased'}
+        </button>
       );
     }
 
     return (
-      <button
-        onClick={handleDeclareDeceased}
-        disabled={isLoading || !userContact?.hasVotingRight}
-        className="px-4 py-2 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500/90 hover:to-pink-500/90 text-white font-medium rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-      >
-        Declare Deceased
-      </button>
+      <span className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded">
+        No Voting Rights
+      </span>
     );
   };
 
   return (
-    <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-3xl p-8">
-      {/* Owner Info */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h3 className="text-xl font-semibold text-white">{owner.firstName} {owner.lastName}</h3>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor()} whitespace-nowrap`}>
-              {getStatusDisplay()}
-            </span>
-          </div>
-          <p className="text-white/60 font-mono text-sm mb-1">{owner.address}</p>
-          <p className="text-white/50 text-sm">Last heartbeat: {new Date(owner.lastHeartbeat * 1000).toLocaleString()}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {getActionButton()}
-          <button
-            onClick={refreshAll}
-            disabled={isLoading}
-            className="p-2 hover:bg-white/10 text-white/70 hover:text-white rounded-lg transition-colors"
-          >
-            <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Messages */}
-      {message && (
-        <div className={`mb-6 rounded-xl p-4 ${
-          messageType === 'success' 
-            ? 'bg-green-500/10 border border-green-400/50 text-green-400'
-            : 'bg-red-500/10 border border-red-400/50 text-red-400'
-        }`}>
-          <div className="flex items-center gap-2">
-            {messageType === 'success' ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            )}
-            <p className="font-medium">{message}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Death Declaration Status */}
-      {deathStatus?.isActive && (
-        <div className="mb-6">
-          <div className="bg-black/20 rounded-xl p-4">
-            <h4 className="text-white font-medium mb-3">Voting Status</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">Votes For:</span>
-                <span className="text-white">{deathStatus.votesFor}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">Votes Against:</span>
-                <span className="text-white">{deathStatus.votesAgainst}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">Total Voting Contacts:</span>
-                <span className="text-white">{deathStatus.totalVotingContacts}</span>
-              </div>
-              <div className="w-full bg-black/20 rounded-full h-2 mt-3">
-                <div 
-                  className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${Math.min((deathStatus.votesFor / deathStatus.totalVotingContacts) * 100, 100)}%` }}
-                />
-              </div>
-              <p className="text-white/60 text-xs text-center mt-2">
-                {deathStatus.consensusReached ? 
-                  'Consensus reached' : 
-                  `${Math.ceil(deathStatus.totalVotingContacts * 0.51) - deathStatus.votesFor} more votes needed for consensus`
-                }
+    <div className="p-6">
+      {/* Grace Period Alert */}
+      {deathStatus?.isInGracePeriod && (
+        <div className="mb-6 backdrop-blur-md bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-orange-400">Grace Period Active</h3>
+              <p className="text-white/70 text-sm">
+                All contacts have voted to declare this owner deceased. The owner has 30 seconds 
+                to prove they are alive by sending a heartbeat.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Vaults */}
-      {showVaults && deathStatus?.isDeceased && (
-        <div className="mt-6 space-y-4">
-          <h4 className="text-lg font-semibold text-white mb-4">Available Vaults</h4>
-          {vaultFiles.length === 0 ? (
-            <div className="bg-black/20 rounded-xl p-6 text-center">
-              <p className="text-white/70">No files available in the vaults</p>
+      {/* Owner Info */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-xl font-semibold text-white">
+            {owner.firstName} {owner.lastName}
+          </h3>
+          <p className="text-white/60 font-mono text-sm">
+            {owner.address.slice(0, 6)}...{owner.address.slice(-4)}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={`px-3 py-1 text-sm rounded-full whitespace-nowrap ${
+            owner.isDeceased ? 'bg-black text-white' :
+            deathStatus?.isInGracePeriod ? 'bg-orange-500/80 text-white' :
+            deathStatus?.isActive ? 'bg-yellow-500/80 text-white' :
+            'bg-emerald-500/80 text-white'
+          }`}>
+            {getStatusDisplay()}
+          </span>
+          <button
+            onClick={refreshAll}
+            disabled={isLoading}
+            className="px-3 py-1 text-sm bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {isLoading ? 'Loading...' : '↻ Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {/* Voting Status */}
+      {deathStatus?.isActive && (
+        <div className="mb-6 backdrop-blur-md bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">🗳️</span>
             </div>
+            <div>
+              <h3 className="text-lg font-semibold text-yellow-400">Voting in Progress</h3>
+              <p className="text-white/70">
+                <strong>{deathStatus.votesFor}</strong> out of <strong>{deathStatus.totalVotingContacts}</strong> contacts have voted for death declaration
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Last Heartbeat & Actions */}
+      <div className="flex items-center justify-between">
+        <div className="text-white/60">
+          Last heartbeat: {new Date(owner.lastHeartbeat * 1000).toLocaleString()}
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            {owner.isDeceased ? (
+              <span className="px-3 py-1 text-sm bg-black/50 text-white rounded-lg">
+                Death Confirmed
+              </span>
+            ) : deathStatus?.isInGracePeriod ? (
+              graceExpiryData?.[1] ? (
+                <button
+                  onClick={handleFinalizeDeclaration}
+                  disabled={isPending}
+                  className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  {isPending ? 'Finalizing...' : 'Finalize Death'}
+                </button>
+              ) : (
+                <span className="px-3 py-1 text-sm bg-orange-500/50 text-white rounded-lg">
+                  Grace Period Active
+                </span>
+              )
+            ) : deathStatus?.isActive ? (
+              hasVoted ? (
+                <span className="px-3 py-1 text-sm bg-blue-500/50 text-white rounded-lg">
+                  Voted: {userVote ? 'Yes' : 'No'}
+                </span>
+              ) : userContact?.hasVotingRight ? (
+                <>
+                  <button
+                    onClick={() => handleVote(true)}
+                    disabled={isPending}
+                    className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    Vote Yes
+                  </button>
+                  <button
+                    onClick={() => handleVote(false)}
+                    disabled={isPending}
+                    className="px-3 py-1 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    Vote No
+                  </button>
+                </>
+              ) : (
+                <span className="px-3 py-1 text-sm bg-white/10 text-white/60 rounded-lg">
+                  No Voting Rights
+                </span>
+              )
+            ) : userContact?.hasVotingRight ? (
+              <button
+                onClick={handleDeclareDeceased}
+                disabled={isPending}
+                className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {isPending ? 'Declaring...' : 'Declare Deceased'}
+              </button>
+            ) : (
+              <span className="px-3 py-1 text-sm bg-white/10 text-white/60 rounded-lg">
+                No Voting Rights
+              </span>
+            )}
+
+            {/* Vault Access Button */}
+            {deathStatus?.isDeceased && (
+              <button
+                onClick={() => setShowVaults(!showVaults)}
+                className="px-3 py-1 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+              >
+                {showVaults ? 'Hide Vaults' : `Access Vaults (${vaultFiles.length})`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Vault Access Section */}
+      {deathStatus?.isDeceased && showVaults && (
+        <div className="mt-6 backdrop-blur-md bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">🔓</span>
+            </div>
+            <h4 className="text-lg font-semibold text-emerald-400">
+              Inherited Vault Access - {vaultFiles.length} Files Available
+            </h4>
+          </div>
+          
+          {vaultFiles.length === 0 ? (
+            <p className="text-white/70">No files found in this owner's vaults.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-3">
               {vaultFiles.map((file) => (
-                <div key={file.id} className="bg-black/20 rounded-xl p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-white font-medium">{file.originalName}</p>
-                        <p className="text-white/50 text-sm">Uploaded: {new Date(file.uploadDate).toLocaleDateString()}</p>
-                      </div>
+                <div key={file.id} className="flex items-center justify-between bg-white/5 border border-emerald-500/20 rounded-xl p-4">
+                  <div className="flex-1">
+                    <div className="font-medium text-white">{file.originalName}</div>
+                    <div className="text-xs text-white/60">
+                      CID: {file.cid} • Uploaded: {new Date(file.uploadDate).toLocaleDateString()}
                     </div>
-                    <button
-                      onClick={() => handleDownloadFile(file)}
-                      disabled={downloadingFiles.has(file.id)}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-600/80 to-indigo-600/80 hover:from-blue-500/90 hover:to-indigo-500/90 text-white font-medium rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                    >
-                      {downloadingFiles.has(file.id) ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                          <span>Downloading...</span>
-                        </div>
-                      ) : (
-                        'Download'
-                      )}
-                    </button>
                   </div>
+                  <button
+                    onClick={() => handleDownloadFile(file)}
+                    disabled={downloadingFiles.has(file.id)}
+                    className="px-4 py-2 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {downloadingFiles.has(file.id) ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Downloading...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span>📥</span>
+                        <span>Download</span>
+                      </div>
+                    )}
+                  </button>
                 </div>
               ))}
+              
+              <div className="mt-4 p-3 bg-emerald-500/10 rounded-lg text-sm text-white/70">
+                <strong>Note:</strong> As an heir, you now have access to all files from this deceased owner's vaults. 
+                These files were encrypted and are now available for inheritance.
+              </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Messages */}
+      {message && (
+        <div className={`mt-4 p-3 rounded-lg text-sm ${
+          messageType === 'success' 
+            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+            : 'bg-red-500/10 text-red-400 border border-red-500/20'
+        }`}>
+          {message}
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-sm">
+          Error: {error.message}
         </div>
       )}
     </div>
@@ -686,9 +787,9 @@ const OwnerRow: React.FC<{
 };
 
 export default function HeirsPortal() {
-  const { address: userAddress, isConnected } = useAccount();
+  const { address } = useAccount();
   const [owners, setOwners] = useState<Owner[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const router = useRouter();
 
@@ -697,20 +798,20 @@ export default function HeirsPortal() {
     address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
     abi: LIFE_SIGNAL_REGISTRY_ABI,
     functionName: 'getContactVaultDetails',
-    args: [userAddress as `0x${string}`],
-    query: { enabled: !!userAddress }
+    args: [address as `0x${string}`],
+    query: { enabled: !!address }
   });
 
   useEffect(() => {
     const loadOwners = async () => {
-      if (!userAddress) {
+      if (!address) {
         setOwners([]);
-        setIsLoading(false);
+        setLoading(false);
         return;
       }
 
       try {
-        setIsLoading(true);
+        setLoading(true);
         setError('');
 
         if (vaultDetailsData) {
@@ -757,104 +858,130 @@ export default function HeirsPortal() {
         setError('Failed to load owners. Please try again.');
         setOwners([]);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
 
     loadOwners();
-  }, [userAddress, vaultDetailsData]);
+  }, [address, vaultDetailsData]);
 
   const handleRefresh = () => {
-    setIsLoading(true);
+    setLoading(true);
     refetchOwners();
   };
 
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 to-black text-white p-4">
-        <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-3xl p-8 text-center max-w-xl mx-auto mt-20">
-          <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Connect Your Wallet</h2>
-          <p className="text-white/70 mb-6">Please connect your wallet to access the heirs portal</p>
-          <WalletConnectButton />
-        </div>
-      </div>
+  if (!address) {
+                        return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Heirs Portal</h1>
+          <p className="text-gray-600">Please connect your wallet to access the heirs portal.</p>
+                                </div>
+                              </div>
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 to-black text-white p-4">
-        <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-3xl p-8 text-center max-w-xl mx-auto mt-20">
-          <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/70">Loading heirs portal...</p>
-        </div>
-      </div>
+  if (loading) {
+                        return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading owners...</p>
+                                </div>
+                              </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-black text-white p-4">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-3xl p-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Heirs Portal</h1>
-              <p className="text-white/70">Monitor and manage your inheritance rights</p>
-            </div>
-            <div className="text-right">
-              <p className="text-white/50 text-sm">Connected as</p>
-              <p className="text-white font-mono text-sm">{userAddress?.slice(0, 6)}...{userAddress?.slice(-4)}</p>
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-500/10 border border-red-400/50 rounded-xl p-4 mb-6">
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-800">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      </div>
+      
+      {/* Wallet Button - Top Right */}
+      <div className="absolute top-4 right-4 z-20">
+        <WalletConnectButton size="md" />
+      </div>
+      
+      {/* Main content */}
+      <div className="relative z-10 px-4 py-8 md:py-16">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <Link href="/" className="text-white/60 hover:text-white/80 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
-                <p className="text-red-400 font-medium">Error</p>
-              </div>
-              <p className="text-red-300 mt-2">{error}</p>
+              </Link>
+              <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">
+                Heirs Portal
+              </h1>
             </div>
-          )}
-
-          {/* Info */}
-          <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-3">
-            <p className="text-blue-300 text-sm">
-              💡 As an heir, you can monitor the status of your inheritance rights and participate in death declarations when necessary.
+            <p className="text-xl text-white/80">
+              Monitor and manage your inheritance responsibilities
             </p>
           </div>
-        </div>
 
-        {/* Owners Grid */}
-        <div className="grid grid-cols-1 gap-6">
-          {owners.length === 0 ? (
-            <div className="backdrop-blur-md bg-white/5 border border-white/20 rounded-3xl p-8 text-center">
-              <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                </svg>
+          {/* Loading State */}
+          {loading ? (
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-emerald-400 mx-auto mb-4"></div>
+              <h2 className="text-xl font-semibold text-white mb-2">Loading Owners</h2>
+              <p className="text-white/60">Fetching your assigned owners from the blockchain...</p>
+            </div>
+          ) : error ? (
+            <div className="max-w-md mx-auto text-center">
+              <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">⚠️</span>
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">No Inheritance Rights</h3>
-              <p className="text-white/70">You haven't been designated as an heir for any vaults yet</p>
+              <h2 className="text-xl font-semibold text-white mb-2">Error Loading Owners</h2>
+              <p className="text-white/60 mb-4">{error}</p>
+              <button
+                onClick={() => refetchOwners()}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : owners.length === 0 ? (
+            <div className="max-w-md mx-auto text-center">
+              <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">👥</span>
+              </div>
+              <h2 className="text-xl font-semibold text-white mb-2">No Owners Found</h2>
+              <p className="text-white/60 mb-4">
+                You haven't been assigned as an heir to any owners yet.
+              </p>
+              <Link
+                href="/"
+                className="inline-block px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+              >
+                Return Home
+              </Link>
             </div>
           ) : (
-            owners.map((owner) => (
-              <OwnerRow
-                key={owner.address}
-                owner={owner}
-                userAddress={userAddress as string}
-                onRefresh={handleRefresh}
-              />
-            ))
+            <div className="space-y-4">
+              {owners.map((owner) => (
+                <div key={owner.address} className="backdrop-blur-md bg-white/5 border border-white/20 rounded-2xl overflow-hidden">
+                  <OwnerRow
+                    owner={owner}
+                    userAddress={address || ''}
+                    onRefresh={() => refetchOwners()}
+                  />
+                </div>
+              ))}
+            </div>
           )}
+
+          {/* Developer link */}
+          <div className="text-center mt-8">
+            <Link href="/debug" className="text-white/40 hover:text-white/60 text-sm transition-colors">
+              Developer Tools
+            </Link>
+          </div>
         </div>
       </div>
     </div>
