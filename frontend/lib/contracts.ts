@@ -1,4 +1,5 @@
 import { useReadContract, useWriteContract } from 'wagmi';
+import { getAddress } from 'viem';
 
 // Contract ABI for LifeSignalRegistry
 export const LIFESIGNAL_REGISTRY_ABI = [
@@ -840,7 +841,7 @@ export const contractUtils = {
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'addContact',
       args: [
-        contactAddress,
+        getAddress(contactAddress),
         firstName,
         lastName,
         email,
@@ -923,7 +924,7 @@ export const contractUtils = {
       address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'authorizeVaultContact',
-      args: [vaultId, contact],
+      args: [vaultId, getAddress(contact)],
     });
   },
 
@@ -1026,7 +1027,7 @@ export const contractUtils = {
       address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'getContactInfo',
-      args: [owner, contact],
+      args: [getAddress(owner), getAddress(contact)],
     });
   },
 
@@ -1053,7 +1054,7 @@ export const contractUtils = {
       address: CONTRACT_ADDRESSES.LIFESIGNAL_REGISTRY,
       abi: LIFESIGNAL_REGISTRY_ABI,
       functionName: 'getContactAuthorizedVaults',
-      args: [ownerAddress, contactAddress],
+      args: [getAddress(ownerAddress), getAddress(contactAddress)],
     });
   },
 

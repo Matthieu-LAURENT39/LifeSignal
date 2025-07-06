@@ -311,18 +311,24 @@ export default function UserPortal() {
       const authorizedContacts = vaultDetails[7] as string[][];
       
       if (vaultIds && Array.isArray(vaultIds)) {
-        vaults = vaultIds.map((vaultId: string, index: number) => ({
-          id: vaultId,
-          name: names?.[index] || `Vault ${index + 1}`,
-          owner: owners?.[index] || ownerAddr,
-          files: [], // Files will be loaded by VaultManager component when vault is selected
-          contacts: [], // Would need to fetch individual contact details
-          isReleased: isReleased?.[index] || false,
-          cypher: {
-            iv: cypherIvs?.[index] || 'placeholder',
-            encryptionKey: encryptionKeys?.[index] || 'placeholder'
-          }
-        }));
+        vaults = vaultIds.map((vaultId: string, index: number) => {
+          // Get authorized contact addresses for this vault
+          const authorizedContactAddrs = authorizedContacts?.[index] || [];
+          // Find the full contact objects for these addresses
+          const vaultContacts = contactDetails.filter((c: Contact) => typeof c.address === 'string' && authorizedContactAddrs.includes(c.address));
+          return {
+            id: vaultId,
+            name: names?.[index] || `Vault ${index + 1}`,
+            owner: owners?.[index] || ownerAddr,
+            files: [], // Files will be loaded by VaultManager component when vault is selected
+            contacts: vaultContacts, // Now contains full contact info
+            isReleased: isReleased?.[index] || false,
+            cypher: {
+              iv: cypherIvs?.[index] || 'placeholder',
+              encryptionKey: encryptionKeys?.[index] || 'placeholder'
+            }
+          };
+        });
       }
     }
 
@@ -589,6 +595,7 @@ export default function UserPortal() {
       
     } catch (error) {
       console.error('Error creating contact:', error);
+      throw error; // Re-throw the error so the ContactCreator can handle it
     }
   };
 
@@ -1219,18 +1226,6 @@ export default function UserPortal() {
               )}
             </div>
 
-            {/* Add Delete Button */}
-            <div className="mt-8 pt-4 border-t border-white/10">
-              <button
-                onClick={() => handleDeleteVault(selectedVault)}
-                className="w-full px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-colors"
-              >
-                Delete Vault
-              </button>
-              <p className="text-white/40 text-xs text-center mt-2">
-                This action cannot be undone
-              </p>
-            </div>
           </div>
         </div>
       )}
